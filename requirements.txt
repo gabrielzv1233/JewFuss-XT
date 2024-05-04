@@ -1,0 +1,9 @@
+discord 
+pillow 
+pyttsx3 
+pyaudio 
+opencv-python-headless 
+pyautogui 
+pywin32 
+psutil 
+pyperclip
