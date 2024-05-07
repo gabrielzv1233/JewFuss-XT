@@ -1,1 +1,0 @@
-This is source code for the easy compiler, do not mess with this code.
