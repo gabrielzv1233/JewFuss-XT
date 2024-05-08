@@ -4,7 +4,7 @@ import tempfile
 import subprocess
 import time
 
-save_unpackaged = False # This is the only thing you should mess with otherwise you may break it
+save_unpackaged = True # This is the only thing you should mess with otherwise you may break it
 
 template_path = os.path.abspath('./source/JewFuss-XT.template')
 output_dir = os.path.abspath('builds')
