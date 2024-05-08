@@ -4,6 +4,8 @@ import tempfile
 import subprocess
 import time
 
+save_unpackaged = False # This is the only thing you should mess with otherwise you may break it
+
 template_path = os.path.abspath('./source/JewFuss-XT.template')
 output_dir = os.path.abspath('builds')
 output_path = os.path.join(output_dir, 'JewFuss-XT.exe')
@@ -22,11 +24,8 @@ print("\nTemplate path:", template_path)
 print("\nOutput directory:", output_dir)
 print("\nOutput location:", output_path +"\n")
 
-with open(template_path, 'r') as file:
-    try:
-        content = file.read()
-    except UnicodeDecodeError:
-        content = ""
+with open(template_path, 'r', encoding='utf-8') as file:
+    content = file.read()
 
 content = content.replace(token, user_input)
 
@@ -45,8 +44,12 @@ elif not os.path.exists(output_dir):
 
 timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
 
-with open(temp_file, 'w') as file:
+with open(temp_file, 'w', encoding='utf-8') as file:
     file.write(content)
+
+if save_unpackaged == True:
+    with open("./builds/unpackaged-latest.py", 'w', encoding='utf-8') as file:
+        file.write(content)
 
 subprocess.run(['pyinstaller', temp_file, '--onefile', '--windowed', '--noconsole', '--distpath=builds', '--workpath=data' , '-n=JewFuss-XT.exe'])
 shutil.rmtree(temp_dir)
