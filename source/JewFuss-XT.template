@@ -41,21 +41,43 @@ config_db = shelve.open(config_path, writeback=True)
 
 @bot.command(help="Initiate configuration for the guild")
 async def init(ctx):
-    if ctx.author.guild_permissions.administrator:
-        guild_id = str(ctx.guild.id)
-        if ctx.message.content.endswith("/f"):
-            del config_db[guild_id]
-            await ctx.send("Previous configuration deleted.")
-            config_db[guild_id] = {'allowed_roles': [], 'allowed_channels': []}
-            await ctx.send("Configuration initialized for this guild.")
-        elif guild_id in config_db:
-            await ctx.send("A configuration already exists for this guild. "
-                           "Run `$init /f` to force reinitialization.")
-        else:
-            config_db[guild_id] = {'allowed_roles': [], 'allowed_channels': []}
-            await ctx.send("Configuration initialized for this guild.")
-    else:
+    guild_id = str(ctx.guild.id)
+    user = ctx.author
+
+    if (
+        (
+            ctx.channel.id in config_db[guild_id]['allowed_channels'] or 
+            ctx.channel.name == f"_jf_{BOT_KEY(6)}" or 
+            user.guild_permissions.administrator
+        ) and not ctx.message.content.endswith("/f")
+    ):
         await ctx.send("You don't have permission to initialize configuration for this guild.")
+        return
+
+    if (
+        not ctx.message.content.endswith("/f") and 
+        ctx.channel.id not in config_db[guild_id]['allowed_channels'] and 
+        not user.guild_permissions.administrator
+    ):
+        await ctx.send("You don't have permission to initialize configuration for this guild.")
+        return
+
+    if not user.guild_permissions.administrator:
+        await ctx.send("You don't have permission to initialize configuration for this guild.")
+        return
+
+    if ctx.message.content.endswith("/f"):
+        del config_db[guild_id]
+        await ctx.send("Previous configuration deleted.")
+        config_db[guild_id] = {'allowed_roles': [], 'allowed_channels': []}
+        await ctx.send("Configuration initialized for this guild.")
+    elif guild_id in config_db:
+        await ctx.send("A configuration already exists for this guild. "
+                       "Run `$init /f` to force reinitialization.")
+    else:
+        config_db[guild_id] = {'allowed_roles': [], 'allowed_channels': []}
+        await ctx.send("Configuration initialized for this guild.")
+
 
 @bot.event
 async def on_guild_join(guild):
@@ -68,75 +90,78 @@ async def on_guild_join(guild):
 
 @bot.command(help=f"Configure allowed roles and channels for running commands, to run a command you must have the a allowed role and be in an allowed channel, running in _jf_{BOT_KEY(6)} bypasses both che cks")
 async def config(ctx, action: str = "", item: str = "", target: str = ""):
-    guild_id = str(ctx.guild.id)
-    if action == "":
-        await ctx.send(f"Please choose a config option: role, channel")
-        return
-    elif item == "":
-        await ctx.send(f"Please choose a mode: add, remove, list")
-        return
-    elif target == "" and item != "list":
-        await ctx.send(f"Please enter a target (role or channel name to add or remove from allow list)")
-        return
-    elif action == 'role':
-        if item == 'add':
-            role = discord.utils.get(ctx.guild.roles, name=target)
-            if not role:
-                await ctx.send("Role not found.")
-                return
-            role_id = role.id
-            if role_id in config_db[guild_id]['allowed_roles']:
-                await ctx.send("Role already exists in allowed roles.")
-            else:
-                config_db[guild_id]['allowed_roles'].append(role_id)
-                await ctx.send(f"Role '{target}' added to allowed roles.")
-        elif item == 'remove':
-            role = discord.utils.get(ctx.guild.roles, name=target)
-            if not role:
-                await ctx.send("Role not found.")
-                return
-            role_id = role.id
+    try:
+        guild_id = str(ctx.guild.id)
+        if action == "":
+            await ctx.send(f"Please choose a config option: role, channel")
+            return
+        elif item == "":
+            await ctx.send(f"Please choose a mode: add, remove, list")
+            return
+        elif target == "" and item != "list":
+            await ctx.send(f"Please enter a target (role or channel name to add or remove from allow list)")
+            return
+        elif action == 'role':
+            if item == 'add':
+                role = discord.utils.get(ctx.guild.roles, name=target)
+                if not role:
+                    await ctx.send("Role not found.")
+                    return
+                role_id = role.id
+                if role_id in config_db[guild_id]['allowed_roles']:
+                    await ctx.send("Role already exists in allowed roles.")
+                else:
+                    config_db[guild_id]['allowed_roles'].append(role_id)
+                    await ctx.send(f"Role '{target}' added to allowed roles.")
+            elif item == 'remove':
+                role = discord.utils.get(ctx.guild.roles, name=target)
+                if not role:
+                    await ctx.send("Role not found.")
+                    return
+                role_id = role.id
 
-            if role_id in config_db[guild_id]['allowed_roles']:
-                config_db[guild_id]['allowed_roles'].remove(role_id)
-                await ctx.send("Role removed from allowed roles.")
+                if role_id in config_db[guild_id]['allowed_roles']:
+                    config_db[guild_id]['allowed_roles'].remove(role_id)
+                    await ctx.send("Role removed from allowed roles.")
+                else:
+                    await ctx.send("Role not found in allowed roles.")
+            elif item == 'list':
+                allowed_roles = [ctx.guild.get_role(role_id) for role_id in config_db[guild_id]['allowed_roles']]
+                role_names = [role.name for role in allowed_roles if role]
+                await ctx.send(f"Allowed roles: {', '.join(role_names)}")
             else:
-                await ctx.send("Role not found in allowed roles.")
-        elif item == 'list':
-            allowed_roles = [ctx.guild.get_role(role_id) for role_id in config_db[guild_id]['allowed_roles']]
-            role_names = [role.name for role in allowed_roles if role]
-            await ctx.send(f"Allowed roles: {', '.join(role_names)}")
+                await ctx.send("Invalid action. Use 'add', 'remove', or 'list'.")
+        elif action == 'channel':
+            if item == 'add':
+                channel = discord.utils.get(ctx.guild.channels, name=target)
+                if channel:
+                    config_db[guild_id]['allowed_channels'].append(channel.id)
+                    await ctx.send(f"Channel '{channel.name}' added to allowed channels.")
+                else:
+                    await ctx.send("Channel not found.")
+            elif item == 'remove':
+                channel = discord.utils.get(ctx.guild.channels, name=target)
+                if not channel:
+                    await ctx.send("Channel not found.")
+                    return
+                channel_id = channel.id
+
+                if channel_id in config_db[guild_id]['allowed_channels']:
+                    config_db[guild_id]['allowed_channels'].remove(channel_id)
+                    await ctx.send("Channel removed from allowed channels.")
+                else:
+                    await ctx.send("Channel not found in allowed channels.")
+            elif item == 'list':
+                allowed_channels = [ctx.guild.get_channel(channel_id) for channel_id in config_db[guild_id]['allowed_channels']]
+                channel_names = [channel.name for channel in allowed_channels if channel]
+                await ctx.send(f"Allowed channels: {', '.join(channel_names)}")
+            else:
+                await ctx.send("Invalid action. Use 'add', 'remove', or 'list'.")
         else:
-            await ctx.send("Invalid action. Use 'add', 'remove', or 'list'.")
-    elif action == 'channel':
-        if item == 'add':
-            channel = discord.utils.get(ctx.guild.channels, name=target)
-            if channel:
-                config_db[guild_id]['allowed_channels'].append(channel.id)
-                await ctx.send(f"Channel '{channel.name}' added to allowed channels.")
-            else:
-                await ctx.send("Channel not found.")
-        elif item == 'remove':
-            channel = discord.utils.get(ctx.guild.channels, name=target)
-            if not channel:
-                await ctx.send("Channel not found.")
-                return
-            channel_id = channel.id
-
-            if channel_id in config_db[guild_id]['allowed_channels']:
-                config_db[guild_id]['allowed_channels'].remove(channel_id)
-                await ctx.send("Channel removed from allowed channels.")
-            else:
-                await ctx.send("Channel not found in allowed channels.")
-        elif item == 'list':
-            allowed_channels = [ctx.guild.get_channel(channel_id) for channel_id in config_db[guild_id]['allowed_channels']]
-            channel_names = [channel.name for channel in allowed_channels if channel]
-            await ctx.send(f"Allowed channels: {', '.join(channel_names)}")
-        else:
-            await ctx.send("Invalid action. Use 'add', 'remove', or 'list'.")
-    else:
-        await ctx.send("Invalid action. Use 'role' or 'channel'.")
-
+            await ctx.send("Invalid action. Use 'role' or 'channel'.")
+    except KeyError:
+        await ctx.send("Config not found, please run `$init` or `$init /f`")
+    
 @bot.event
 async def on_message(message):
     if message.author.bot:

@@ -22,7 +22,7 @@ import tempfile
 import shelve
 import sys
 
-TOKEN = "MTIzNTY2NTc2Mzc2NDAxNTIyNQ.GZ7lV0.ia8P5W2DPt2N0jxJmxbG4UpHSBnwVjhLuj80ds"
+TOKEN = "BOT-TOKEN-GOES-HERE"
 
 def BOT_KEY(n):
     BK=""
