@@ -20,4 +20,10 @@
 6. In CMD (or your preferred terminal), navigate to the root project folder (where you see this file `readme.md`) and run `python easy-compiler.py` or `python compile.py`. The executable will be saved in the subdirectory `/builds`, old builds will be saved with a timestamp of archive time.
 7. (Optional) I recommend running the bot on your device to ensure it works. To stop the bot, type `$estop` in the Discord server where you added the bot, or run `taskkill /im "taskname.exe" /f`, where "taskname.exe" is the name of the executable.
 
+## Where to run commands
+Commands must be ran in the channel described in the bots activity status, this bypasses channel and role filter
+To use in other channels, you must be running in an allowed channel while having the whitelisted role
+To add a channel run `config channel add channelname` not `config channel add #channelname` to use the channel added you must have a allowed role other options are `config channel remove channelname` and `config channel list`
+To add a allowed role run `config role add rolename` not `config role add @rolename` other avalible commands are `config role remove rolename` and `config role list`
+
 Original source code: [Desu23's JewFuss-X](https://github.com/DeSu23/JewFuss-X/)
