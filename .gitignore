@@ -6,3 +6,10 @@ JewFuss-XT.spec
 config.bak
 config.dat
 config.dir
+tests/JustTTS.spec
+JustTTS.spec
+/tests/build
+/tests/dist
+/tests/data
+/tests/builds
+/tests/JustTTS.spec
