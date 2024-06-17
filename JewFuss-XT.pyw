@@ -26,7 +26,7 @@ import sys
 import io
 import os
 
-TOKEN = "MTIzNTY2NTc2Mzc2NDAxNTIyNQ.GHY3rF.sjaAOYkTTvLFaFucNdm3QDS2Uu5_ui-S2PAtt0"
+TOKEN = "BOT-TOKEN-GOES-HERE"
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 

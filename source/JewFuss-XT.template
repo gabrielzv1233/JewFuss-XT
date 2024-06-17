@@ -25,6 +25,7 @@ import cv2
 import sys
 import io
 import os
+
 TOKEN = "BOT-TOKEN-GOES-HERE"
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
