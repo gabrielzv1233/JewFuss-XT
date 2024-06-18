@@ -6,7 +6,8 @@
 - To run JewFuss-XT without compiling, Please install all the required extension from requirements.txt using command `pip install -r requirements.txt` and follow the normal setup steps (not steps for easy compiler) than run the script
 
 # Info/Warnings
-- running the compiler for the first time will likely take a while, antivirus will also likly block the file when its compiled for the first time, just allow it through defender or whatever software you use and re-run the compiler
+- Normal compiler is depreciated hense why its named `depreciated compile.py`
+- Running the compiler for the first time will likely take a while, antivirus will also likly block the file when its compiled for the first time, just allow it through your antivirus software and re-run the compiler
 - Commands can be executed in any channel by any user. Place this bot only on private servers with trusted members.
 - Only one instance of this bot should be active at a time. Running multiple instances will cause commands to execute on all devices. It's possible to deploy the same bot on multiple Discord servers.
 - Compilers and JewFuss-XT are specifically designed for Windows. Linux and MacOS are untested and may not work.
@@ -26,4 +27,7 @@ To use in other channels, you must be running in an allowed channel while having
 To add a channel run `config channel add channelname` not `config channel add #channelname` to use the channel added you must have a allowed role other options are `config channel remove channelname` and `config channel list`
 To add a allowed role run `config role add rolename` not `config role add @rolename` other avalible commands are `config role remove rolename` and `config role list`
 
-Original source code: [Desu23's JewFuss-X](https://github.com/DeSu23/JewFuss-X/)
+
+## Final notes 
+- Originaly created by desu23 and can be found here [Desu23's JewFuss-X](https://github.com/DeSu23/JewFuss-X/)
+- You can submit a github issue if you figure out what causes Windows Defender (or other antivirus's) to trigger 
