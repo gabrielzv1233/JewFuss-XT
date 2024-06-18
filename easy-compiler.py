@@ -6,7 +6,7 @@ import time
 
 save_unpackaged = True # This is the only thing you should mess with otherwise you may break it
 
-template_path = os.path.abspath('./source/JewFuss-XT.template')
+template_path = os.path.abspath('./source/JewFuss-XT.template.py')
 output_dir = os.path.abspath('builds')
 output_path = os.path.join(output_dir, 'JewFuss-XT.exe')
 log_file_path = os.path.join(output_dir, 'easy-compiler-build.log')
