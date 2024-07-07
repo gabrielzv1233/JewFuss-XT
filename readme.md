@@ -24,8 +24,8 @@
 ## Where to run commands
 Commands must be ran in the channel described in the bots activity status, this bypasses channel and role filter
 To use in other channels, you must be running in an allowed channel while having the whitelisted role
-To add a channel run `config channel add channelname` not `config channel add #channelname` to use the channel added you must have a allowed role other options are `config channel remove channelname` and `config channel list`
-To add a allowed role run `config role add rolename` not `config role add @rolename` other avalible commands are `config role remove rolename` and `config role list`
+To add a channel run `config channel add channelname` not `config channel add channelname` to use the channel added you must have a allowed role other options are `config channel remove channelname` and `config channel list`
+To add a allowed role run `config role add rolename` not `config role add rolename` other avalible commands are `config role remove rolename` and `config role list`
 
 
 ## Final notes 

