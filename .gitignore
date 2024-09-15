@@ -3,9 +3,6 @@
 JewFuss-XT.exe.spec
 bot-tokens.txt
 JewFuss-XT.spec
-config.bak
-config.dat
-config.dir
 tests/JustTTS.spec
 JustTTS.spec
 /tests/build
@@ -13,3 +10,9 @@ JustTTS.spec
 /tests/data
 /tests/builds
 /tests/JustTTS.spec
+/JewFuss-XT-Updater/build
+/JewFuss-XT-Updater/dist
+/JewFuss-XT-Updater/data
+/JewFuss-XT-Updater/builds
+/JewFuss-XT-Updater/JustTTS.spec
+Updater.exe.spec
