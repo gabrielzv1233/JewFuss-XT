@@ -9,7 +9,7 @@ import sys
 import os
 import re
 
-TOKEN = "Discord bot token"  # Do not remove or modify this string (compiler looks for this) - 3f298h
+TOKEN = "Discord bot token"  # Do not remove or modify this comment (compiler looks for this) - 3f298h
 
 intents = discord.Intents.default()
 intents.message_content = True

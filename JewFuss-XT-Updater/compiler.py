@@ -10,7 +10,7 @@ template_path = os.path.abspath('./JewFuss-XT-Updater/Updater.py')
 output_dir = os.path.abspath('./JewFuss-XT-Updater/builds')
 output_path = os.path.join(output_dir, 'Updater.exe')
 log_file_path = os.path.join(output_dir, 'compiler-build.log')
-search_string = '# Do not remove or modify this string (compiler looks for this) - 3f298h'
+search_string = '# Do not remove or modify this comment (compiler looks for this) - 3f298h'
 
 while True:
     user_input = input('Please enter bot token:\n>> ').strip()

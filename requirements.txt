@@ -7,4 +7,5 @@ requests
 pyaudio
 psutil
 Pillow
+pynput
 wmi

@@ -1,10 +1,10 @@
-import os
-import shutil
-import tempfile
-import subprocess
-from PIL import Image
 from plyer import filechooser
+from PIL import Image
+import subprocess
+import tempfile
+import shutil
 import time
+import os
 
 save_unpackaged = True  # This is the only thing you should mess with otherwise you may break it
 
@@ -13,7 +13,7 @@ output_dir = os.path.abspath('builds')
 data_dir = os.path.abspath('data')
 output_path = os.path.join(output_dir, 'JewFuss-XT.exe')
 log_file_path = os.path.join(output_dir, 'easy-compiler-build.log')
-search_string = '# Do not remove or modify this string (easy compiler looks for this) - 23r98h'
+search_string = '# Do not remove or modify this comment (easy compiler looks for this) - 23r98h'
 
 if os.path.isfile(os.path.join(data_dir, "icon.ico")):
     os.remove(os.path.join(data_dir, "icon.ico"))
