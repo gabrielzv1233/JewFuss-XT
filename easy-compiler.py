@@ -31,6 +31,7 @@ while True:
     while True:
         if useicon.lower().startswith("y"):
             useicon = True
+            icon = filechooser.open_file(multiple=True, filters=['*.png', '*.jpeg', '*.jpg', '*.bmp', '*.gif', '*.tiff'])[0]
             break
         
         elif useicon.lower().startswith("n"):
@@ -39,11 +40,8 @@ while True:
         else:
             useicon = input("Invalid option, please choose [y(es)/n(o)]\n>> ")
             
-    icon = filechooser.open_file(multiple=True, filters=['*.png', '*.jpeg', '*.jpg', '*.bmp', '*.gif', '*.tiff'])[0]
-    
-    if not icon:
+    if "icon" not in locals():
         print("No icon provided, using default PyInstaller icon")
-        icon = None
         break
 
     if not os.path.isfile(icon):
@@ -81,7 +79,7 @@ while True:
 print("\nTemplate path:", template_path)
 print("\nOutput directory:", output_dir)
 print("\nOutput location:", output_path)
-if icon:
+if "icon" in locals():
     print("\nIcon path:", icon)
 print("\nLog file path:", log_file_path + "\n")
 
@@ -122,11 +120,12 @@ cmd = [
     'pyinstaller', temp_file, '--onefile', '--windowed', '--noconsole', 
     f'--distpath={output_dir}', f'--workpath={data_dir}', '-n=JewFuss-XT.exe'
 ]
-if icon:
+if "icon" in locals():
     cmd.extend(['--icon', icon])
 
 subprocess.run(cmd)
 shutil.rmtree(temp_dir)
+os.system(f'explorer /select,"{output_dir}\JewFuss-XT.exe"')
 
 with open(log_file_path, 'a') as log_file:
     log_file.write(f"\"{timestamp}\": {user_input} JewFuss-XT.exe\n")

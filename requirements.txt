@@ -1,5 +1,6 @@
 opencv-python
 pyinstaller
+PyEleveate
 pyautogui
 pyperclip
 discord

