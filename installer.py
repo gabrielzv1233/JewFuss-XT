@@ -3,7 +3,8 @@ import shutil
 import sys
 import subprocess
 import PyElevate
-
+import time
+import psutil
 # Sadly you cannot run this as a .py and must compile it first to test
 
 # compile command 
@@ -76,8 +77,11 @@ try:
     if os.path.exists(final_app_path):
         print(f"Found existing file")
         try:
-            print("Terminating existing process...")
-            os.system(f'taskkill /im "{app_name}" /f ')
+            if any(app_name.lower() in (p.info['exe'] or '').lower() for p in psutil.process_iter(['exe'])): 
+                print("Terminating existing process...")
+                os.system(f'taskkill /im "{app_name}" /f ')
+                print(f"Terminated {app_name}, waiting 5 seconds for process to close...")
+                time.sleep(5)
             os.remove(final_app_path)
             print(f"Deleted existing file: {app_name}")
         except Exception as e:
