@@ -2,6 +2,7 @@ from plyer import filechooser
 from PIL import Image
 import subprocess
 import tempfile
+import requests
 import shutil
 import time
 import os
@@ -27,7 +28,7 @@ def is_valid_image(file_path):
         return False
     
 while True:
-    useicon = input("Would you like to use a custom icon? [y(es)/n(o)]\n>> ")
+    useicon = input("Would you like to use a custom icon? [y(es)/n(o)]\n>> ").strip()
     while True:
         if useicon.lower().startswith("y"):
             useicon = True
@@ -38,7 +39,7 @@ while True:
             break
         
         else:
-            useicon = input("Invalid option, please choose [y(es)/n(o)]\n>> ")
+            useicon = input("Invalid option, please choose [y(es)/n(o)]\n>> ").strip()
             
     if "icon" not in locals():
         print("No icon provided, using default PyInstaller icon")
@@ -69,12 +70,19 @@ while True:
         continue
 
 while True:
-    user_input = input('Please enter bot token:\n>> ').strip()
+    invalidtoken = False
+    user_input = input('Please enter a valid bot token:\n>> ').strip()
+    
     if user_input:
-        user_input = f'TOKEN = "{user_input}"'
-        break
+        print("Checking if token is valid...")
+        if requests.get("https://discord.com/api/v10/users/@me", headers={"Authorization": f"Bot {user_input}"}).status_code != 200: # 200 is valid, 401 is invalid, 429 is ratelimited
+            print("Error: invalid bot token")
+            invalidtoken = True
+        if invalidtoken == False:
+            user_input = f'TOKEN = "{user_input}"'
+            break
     else:
-        print("Error: input cannot be empty\n")
+        print("Error: input cannot be empty")
 
 print("\nTemplate path:", template_path)
 print("\nOutput directory:", output_dir)
