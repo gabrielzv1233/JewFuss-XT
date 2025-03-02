@@ -136,4 +136,4 @@ shutil.rmtree(temp_dir)
 os.system(f'explorer /select,"{output_dir}\JewFuss-XT.exe"')
 
 with open(log_file_path, 'a') as log_file:
-    log_file.write(f"\"{timestamp}\": {user_input} JewFuss-XT.exe\n")
+    log_file.write(f"\"{timestamp}\": {user_input}\n")
