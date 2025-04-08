@@ -1,4 +1,3 @@
-
 try:
     import discord
     from discord import app_commands
@@ -16,6 +15,7 @@ except ModuleNotFoundError:
     import os
     os.system("pip install requests")
     import requests
+    
 TOKEN = "Bot token"
 tts_process = None
 bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())

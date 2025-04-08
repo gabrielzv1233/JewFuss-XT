@@ -36,7 +36,7 @@ try:
 
         os.system(f'cd {os.path.dirname(os.path.abspath(sys.argv[0]))} && pyinstaller --onefile --add-binary="builds/{app_name};." --add-data="{temp_file_path};." --distpath=builds --workpath=data installer.py')
         os.remove(temp_file_path)
-        sys.exit("Finished compiling")
+        sys.exit("\nFinished compiling")
 
 except KeyboardInterrupt:
     sys.exit("Keyboard interrupt, exiting compiler...")
