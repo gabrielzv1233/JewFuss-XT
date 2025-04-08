@@ -1,13 +1,16 @@
 from plyer import filechooser
 from PIL import Image
+import urllib.request
 import subprocess
 import tempfile
 import requests
 import shutil
 import time
 import os
+import re
 
 save_unpackaged = True  # This is the only thing you should mess with otherwise you may break it
+latest_url = "https://raw.githubusercontent.com/gabrielzv1233/JewFuss-XT/refs/heads/main/source/JewFuss-XT.template.py"
 
 template_path = os.path.abspath('./source/JewFuss-XT.template.py')
 output_dir = os.path.abspath('builds')
@@ -26,7 +29,33 @@ def is_valid_image(file_path):
         return True
     except (IOError, SyntaxError):
         return False
-    
+
+try:
+    remote_lines = urllib.request.urlopen(latest_url).read().decode().splitlines()
+except Exception as e:
+    print("Error downloading remote file:", e)
+    remote_lines = []
+
+remote_version = None
+for line in remote_lines:
+    if "- 25c75g" in line:
+        m = re.search(r'version\s*=\s*"([\d.]+)"', line)
+        if m: remote_version = m.group(1)
+        break
+
+local_version = None
+if os.path.exists(template_path):
+    with open(template_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            if "- 25c75g" in line:
+                m = re.search(r'version\s*=\s*"([\d.]+)"', line)
+                if m: local_version = m.group(1)
+                break
+
+if remote_version and local_version:
+    if tuple(map(int, local_version.split("."))) < tuple(map(int, remote_version.split("."))):
+        print(f"JewFuss-XT has an update: {local_version} → {remote_version}\nGet latest update here: https://github.com/gabrielzv1233/JewFuss-XT\n")
+
 while True:
     useicon = input("Would you like to use a custom icon? [y(es)/n(o)]\n>> ").strip()
     while True:
