@@ -34,7 +34,7 @@ try:
         with open(temp_file_path, "w") as f:
             f.write(app_name)
 
-        os.system(f'cd {os.path.dirname(os.path.abspath(sys.argv[0]))} && pyinstaller --onefile --add-binary="builds/{app_name};." --add-data="{temp_file_path};." --distpath=builds --workpath=data installer.py')
+        os.system(f'cd {os.path.dirname(os.path.abspath(sys.argv[0]))} && pyinstaller --onefile --add-binary="builds/{app_name};." --add-data="{temp_file_path};." --distpath=builds --workpath=data {sys.argv[0]}')
         os.remove(temp_file_path)
         sys.exit("\nFinished compiling")
 
