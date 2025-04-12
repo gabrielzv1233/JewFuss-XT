@@ -1,5 +1,6 @@
 opencv_python
 pycryptodomex
+pyinstaller
 discord.py
 PyAutoGUI
 PyElevate
