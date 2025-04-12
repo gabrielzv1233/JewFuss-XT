@@ -1,5 +1,7 @@
 /data
 /builds
+/build
+/dist
 JewFuss-XT.exe.spec
 bot-tokens.txt
 JewFuss-XT.spec
@@ -19,3 +21,5 @@ Updater.exe.spec
 installer.spec
 executablename.txt
 test.py
+*.spec
+*.log
