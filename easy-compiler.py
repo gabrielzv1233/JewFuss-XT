@@ -10,7 +10,7 @@ import os
 import re
 
 save_unpackaged = True  # This is the only thing you should mess with otherwise you may break it
-latest_url = "https://raw.githubusercontent.com/gabrielzv1233/JewFuss-XT/refs/heads/main/source/JewFuss-XT.template.py"
+latest_url = "https://raw.githubusercontent.com/gabrielzv1233/JewFuss-XT/refs/heads/main/source/JewFuss-XT.py"
 
 template_path = os.path.abspath('JewFuss-XT.py')
 output_dir = os.path.abspath('builds')
