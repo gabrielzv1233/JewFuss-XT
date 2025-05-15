@@ -18,9 +18,6 @@ data_dir = os.path.abspath('data')
 output_path = os.path.join(output_dir, 'JewFuss-XT.exe')
 log_file_path = os.path.join(output_dir, 'easy-compiler-build.log')
 search_string = '# Do not remove or modify this comment (easy compiler looks for this) - 23r98h'
-
-if os.path.isfile(os.path.join(data_dir, "icon.ico")):
-    os.remove(os.path.join(data_dir, "icon.ico"))
     
 def is_valid_image(file_path):
     try:
@@ -61,6 +58,12 @@ while True:
     while True:
         if useicon.lower().startswith("y"):
             useicon = True
+            icon_path = os.path.join(data_dir, "icon.ico")
+            prev_icon_path = os.path.join(data_dir, "prev_icon.ico")
+            if os.path.isfile(prev_icon_path):
+                os.remove(prev_icon_path)
+            if os.path.isfile(icon_path):
+                os.rename(icon_path, prev_icon_path)
             icon = filechooser.open_file(multiple=True, filters=['*.png', '*.jpeg', '*.jpg', '*.bmp', '*.gif', '*.tiff'])[0]
             break
         
