@@ -162,7 +162,7 @@ if save_unpackaged:
 
 cmd = [
     'pyinstaller', temp_file, '--onefile', '--windowed', '--noconsole', 
-    f'--distpath={output_dir}', f'--workpath={data_dir}', '-n=JewFuss-XT.exe'
+    f'--distpath={output_dir}', f'--workpath={data_dir}', f'--specpath={data_dir}', '-n=JewFuss-XT.exe'
 ]
 if "icon" in locals():
     cmd.extend(['--icon', icon])
