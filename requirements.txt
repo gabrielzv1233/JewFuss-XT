@@ -13,5 +13,6 @@ psutil
 pynput
 Pillow
 plyer
+pycaw
 mss
 WMI
