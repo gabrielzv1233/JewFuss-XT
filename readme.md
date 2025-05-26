@@ -30,6 +30,7 @@
 5. Scroll down to **Privileged Gateway Intents** and enable **Presence**, **Server Members**, and **Message Content** intents.
 
 ### Compiling the RAT
+> You can also use `easy-compiler-ui.py` for ease of use, but most steps will look the same
 1. If using a terminal, navigate to the project’s root folder using `cd folderpath` and run `python easy-compiler.py`.  
    If using an IDE like [Visual Studio Code](https://code.visualstudio.com/), open the project folder, open `easy-compiler.py`, and press the **Run** button. *(You may need to configure Python in your IDE first.)*
 2. Choose whether to use a custom icon by typing `y` or `n` (`yes` or `no` also work). If you select **yes**, a file chooser will open. If **no**, the default icon will be used.
@@ -56,6 +57,9 @@ Admins can run `$init /f` to wipe a channel (delete and recreate it). This does 
 
 ### Installer.py
 `installer.py` is a simple installer. When running the script as `.py`, it compiles itself into an executable.
+
+### easy-compiler-ui.py
+`easy-compiler-ui.py` is a compiler UI that remembers settings, lets you name the exe, and auto-runs the installer.
 
 #### What does it do?
 - Copies the bundled executable (the compiled JewFuss-XT) to a target folder.
