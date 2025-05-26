@@ -16,3 +16,4 @@ plyer
 pycaw
 mss
 WMI
+vdf

