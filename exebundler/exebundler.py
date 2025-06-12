@@ -1,4 +1,6 @@
 from tkinter import messagebox, Tk
+from ctypes import windll
+import PyElevate
 import subprocess
 import tempfile
 import shutil
@@ -8,6 +10,10 @@ import os
 
 root = Tk()
 root.withdraw()
+
+if not PyElevate.elevated():
+    messagebox.showerror("Permissions error", "Please run as administrator.")
+    sys.exit(0)
 
 if getattr(sys, 'frozen', False):
     base_path = sys._MEIPASS
@@ -28,19 +34,8 @@ try:
     shutil.copy2(os.path.join(base_path, main), main_path)
     shutil.copy2(os.path.join(base_path, secondary), secondary_path)
     
-    # Main process, runs as if running directly from file explorer
     p1 = subprocess.Popen(main_path, shell=True)
-
-    
-    # Secondary process, runs silently without a console window (including ones without --noconsole from pyinstaller)
-    startupinfo = subprocess.STARTUPINFO()
-    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-    p2 = subprocess.Popen(
-        secondary_path,
-        shell=True,
-        startupinfo=startupinfo,
-        creationflags=subprocess.CREATE_NO_WINDOW
-    )
+    p2 = subprocess.Popen([secondary_path, "--hidewindow"], shell=True)
 
     p1.wait()
     p2.wait()
