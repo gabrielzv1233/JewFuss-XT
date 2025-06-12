@@ -14,7 +14,6 @@ save_unpackaged = True
 latest_url = "https://raw.githubusercontent.com/gabrielzv1233/JewFuss-XT/refs/heads/main/JewFuss-XT.py"
 
 # You shouldn't need to change anything below this line or it may break
-
 base_dir = os.path.dirname(os.path.abspath(__file__))
 template_path = os.path.join(base_dir, 'JewFuss-XT.py')
 output_dir = os.path.join(base_dir, 'builds')
@@ -23,6 +22,12 @@ output_path = os.path.join(output_dir, 'JewFuss-XT.exe')
 log_file_path = os.path.join(output_dir, 'easy-compiler-build.log')
 search_string = '# Do not remove or modify this comment (easy compiler looks for this) - 23r98h'
 reccomeneded_version = (3, 11, 9)
+
+match = re.match(r"^https:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/", latest_url)
+if match:
+    username, repo = match.groups()
+    repo_url = f"https://github.com/{username}/{repo}"
+    print(repo_url)
 
 current_version = sys.version_info[:3]
 if current_version != reccomeneded_version:
@@ -63,7 +68,7 @@ if os.path.exists(template_path):
 
 if remote_version and local_version:
     if tuple(map(int, local_version.split("."))) < tuple(map(int, remote_version.split("."))):
-        print(f"JewFuss-XT has an update: {local_version} → {remote_version}\nGet latest update here: https://github.com/gabrielzv1233/JewFuss-XT\n")
+        print(f"JewFuss-XT has an update: {local_version} → {remote_version}\nGet latest update here: {repo_url}\nOr run \"python update.py {repo_url}\"")
 
 try:
     while True:
