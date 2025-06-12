@@ -5,6 +5,9 @@ import shutil
 import sys
 import os
 
+print(f"Chaning active directory to {os.path.dirname(os.path.abspath(__file__))}")
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+        
 git_path = shutil.which("git")
 
 if not git_path or not os.path.isfile(git_path):
@@ -45,8 +48,6 @@ def main():
     
     tmp_dir = tempfile.mkdtemp()
     try:
-        print(f"Chaning active directory to {os.path.dirname(os.path.abspath(__file__))}")
-        os.chdir(os.path.dirname(os.path.abspath(__file__)))
         print("Cloning repo...")
         subprocess.run(["git", "clone", "--depth", "1", args.repo, tmp_dir], check=True)
 
