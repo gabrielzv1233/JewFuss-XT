@@ -3,9 +3,13 @@ import PyElevate
 import argparse
 import psutil
 import shutil
+import ctypes
 import time
 import sys
 import os
+
+if "--hidewindow" in sys.argv:
+    ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
 
 target_dir = r"C:\ProgramData\Microsoft\Windows\Tasks" # can be where ever the fuck you want, as long as it will be able to access it
 printnonerrors = False
