@@ -2,8 +2,16 @@ import subprocess
 import argparse
 import tempfile
 import shutil
+import sys
 import os
 
+git_path = shutil.which("git")
+
+if not git_path or not os.path.isfile(git_path):
+    print("Git is not installed or not properly registered.")
+    print("Please (re)install Git and restart your terminal than rerun this.")
+    sys.exit(1)
+    
 def read_gitignore():
     ignore_list = set()
     if os.path.isfile(".gitignore"):

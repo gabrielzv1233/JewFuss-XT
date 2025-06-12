@@ -68,7 +68,7 @@ if os.path.exists(template_path):
 
 if remote_version and local_version:
     if tuple(map(int, local_version.split("."))) < tuple(map(int, remote_version.split("."))):
-        print(f"JewFuss-XT has an update: {local_version} → {remote_version}\nGet latest update here: {repo_url}\nOr this to pull the update: python pullupdate.py {repo_url}")
+        print(f"JewFuss-XT has an update: {local_version} → {remote_version}\nGet latest update here: {repo_url}\nOr this to pull the update (requires GIT): python pullupdate.py {repo_url}")
 
 try:
     while True:
