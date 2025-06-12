@@ -1,9 +1,8 @@
-import os
-import shutil
 import subprocess
-import tempfile
 import argparse
-import sys
+import tempfile
+import shutil
+import os
 
 def read_gitignore():
     ignore_list = set()
