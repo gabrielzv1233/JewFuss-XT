@@ -1,5 +1,6 @@
 from tkinter import filedialog
 from pathlib import Path
+import argparse
 import tempfile
 import win32api
 import win32con
@@ -53,9 +54,16 @@ if not main_path or not secondary_path:
     raise SystemExit("Both main and secondary executables must be selected.")
 
 main_name = Path(main_path).stem
-extract_icon(main_path, data_dir)
 
-icon_path = os.path.join(base_dir, 'data', 'icon.ico')
+parser = argparse.ArgumentParser()
+parser.add_argument('--icon', type=str, default=None)
+args = parser.parse_args()
+
+if args.icon is not None:
+    icon_path = args.icon
+else:
+    extract_icon(main_path, data_dir)
+    icon_path = os.path.join(base_dir, 'data', 'icon.ico')
 
 build_dir = tempfile.mkdtemp()
 

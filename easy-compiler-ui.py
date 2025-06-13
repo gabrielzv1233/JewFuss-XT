@@ -202,7 +202,16 @@ class BuilderUI(tk.Tk):
         if not self.token_valid:
             messagebox.showerror("Error", "Invalid token")
             return
-
+        
+        if self.icon_path:
+            try:
+                dest = os.path.join(DATA_DIR, "prev_icon.ico")
+                if os.path.abspath(self.icon_path) != os.path.abspath(dest):
+                    shutil.copyfile(self.icon_path, dest)
+                    print(f"Saved icon to {dest} for reuse")
+            except Exception as e:
+                print(f"Failed to save prev_icon.ico: {e}")
+        
         self.disable_inputs()
         print("Starting buildprocess")
         threading.Thread(target=self.run_build, daemon=True).start()
@@ -224,7 +233,7 @@ class BuilderUI(tk.Tk):
         if os.path.isfile(outpth):
             bak = time.strftime('%Y-%m-%d-%H-%M-%S-') + out_name
             os.rename(outpth, os.path.join(OUTPUT_DIR, bak))
-
+    
         cmd = [
             sys.executable, '-m', 'PyInstaller', tf,
             '--onefile','--windowed','--noconsole',
@@ -242,13 +251,21 @@ class BuilderUI(tk.Tk):
 
         timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
         invite = f"https://discord.com/oauth2/authorize?client_id={self.bot_id}&permissions=8&scope=bot"
-
+        
+        out_file = out_name+".exe" if not out_name.endswith('.exe') else out_name
+        outpth = os.path.join(OUTPUT_DIR, out_file)
+        
         if os.path.isfile(outpth):
             if self.installer_var.get():
                 installer_py = os.path.join(BASE_DIR, "installer.py")
                 print("Building installer")
                 subprocess.Popen(
-                    [sys.executable, installer_py, f'--file={out_name}'],
+                    [
+                        sys.executable, installer_py,
+                        f'--file={out_file}',
+                        f'--icon={self.icon_path}',
+                        f'--name={out_name}-installer'
+                    ],
                     cwd=OUTPUT_DIR,
                     creationflags=subprocess.CREATE_NEW_CONSOLE,
                     close_fds=True

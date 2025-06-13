@@ -32,7 +32,19 @@ try:
     if os.path.splitext(sys.argv[0])[1].lower() == ".py":  # Compile if running as .py
         parser = argparse.ArgumentParser()
         parser.add_argument('--file', type=str, default=None)
+        parser.add_argument('--icon', type=str, default=None)
+        parser.add_argument('--name', type=str, default=None)
         args = parser.parse_args()
+        
+        if args.icon is not None:
+            appicon = f'--icon "{args.icon}"'
+        else:
+            appicon = ""
+            
+        if args.name is not None:
+            appname = f'--name "{args.name.removesuffix(".exe")}"'
+        else:
+            appname = ""
         
         if args.file == None:
             app_name = input("Enter the name of the executable in the builds folder, leave empty to use JewFuss-XT.exe:\n>> ")
@@ -50,7 +62,7 @@ try:
         with open(temp_file_path, "w") as f:
             f.write(app_name)
 
-        os.system(f'cd {os.path.dirname(os.path.abspath(sys.argv[0]))} && pyinstaller --onefile --add-binary="builds/{app_name};." --add-data="{temp_file_path};." --distpath=builds --workpath=data {sys.argv[0]}')
+        os.system(f'cd {os.path.dirname(os.path.abspath(sys.argv[0]))} && pyinstaller --onefile --add-binary="builds/{app_name};." --add-data="{temp_file_path};." --distpath=builds --workpath=data {appname} {appicon} {sys.argv[0]}')
         os.remove(temp_file_path)
         sys.exit("\nFinished compiling")
 
