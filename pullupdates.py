@@ -1,65 +1,52 @@
-import subprocess
-import argparse
-import tempfile
-import shutil
-import sys
-import os
+import subprocess, argparse, sys, os, shutil, pathlib
+cwd = pathlib.Path(__file__).resolve().parent
+os.chdir(cwd)
 
-print(f"Chaning active directory to {os.path.dirname(os.path.abspath(__file__))}")
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
-        
 git_path = shutil.which("git")
+if git_path is None or not pathlib.Path(git_path).is_file():
+    sys.exit("Git is not installed or not on PATH.")
 
-if not git_path or not os.path.isfile(git_path):
-    print("Git is not installed or not properly registered.")
-    print("Please (re)install Git and restart your terminal than rerun this.")
-    sys.exit(1)
-    
-def read_gitignore():
-    ignore_list = set()
-    if os.path.isfile(".gitignore"):
-        with open(".gitignore", "r") as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#"):
-                    ignore_list.add(line)
-    return ignore_list
+def run(cmd):
+    subprocess.run(cmd, check=True)
 
-def copy_all(src, dst, ignored):
-    for root, dirs, files in os.walk(src):
-        rel_path = os.path.relpath(root, src)
-        dst_root = os.path.join(dst, rel_path) if rel_path != '.' else dst
+def ensure_repo(url: str):
+    if not (cwd / ".git").is_dir():
+        run(["git", "init"])
+        run(["git", "remote", "add", "origin", url])
+    current = subprocess.check_output(
+        ["git", "config", "--get", "remote.origin.url"], text=True
+    ).strip()
+    if current != url:
+        run(["git", "remote", "set-url", "origin", url])
 
-        os.makedirs(dst_root, exist_ok=True)
+def update(branch: str):
+    dirty = (
+        subprocess.run(["git", "diff", "--quiet"]).returncode != 0
+        or subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard", "--error-unmatch", "."],
+            stdout=subprocess.DEVNULL,
+        ).returncode
+        == 0
+    )
+    if dirty:
+        run(["git", "stash", "--include-untracked"])
 
-        for file in files:
-            rel_file = os.path.normpath(os.path.join(rel_path, file))
-            if any(rel_file.startswith(pattern) for pattern in ignored):
-                continue
-            shutil.copy2(os.path.join(root, file), os.path.join(dst_root, file))
-
-def main():
-    parser = argparse.ArgumentParser(description="Update current folder from a GitHub repo.")
-    parser.add_argument("repo", help="Git repository URL to pull from")
-    args = parser.parse_args()
-
-    print("WARNING: This will overwrite any files in the current directory unless they are listed in .gitignore.")
-    input("Press Enter to continue or Ctrl+C to cancel...")
-    
-    tmp_dir = tempfile.mkdtemp()
+    run(["git", "fetch", "origin", branch])
     try:
-        print("Cloning repo...")
-        subprocess.run(["git", "clone", "--depth", "1", args.repo, tmp_dir], check=True)
-
-        print("Copying files (ignoring .gitignore patterns)...")
-        ignore_patterns = read_gitignore()
-        copy_all(tmp_dir, ".", ignore_patterns)
-
-        print("Update complete.")
+        run(["git", "merge", "--ff-only", "--no-edit", "FETCH_HEAD"])
     except subprocess.CalledProcessError:
-        print("❌ Failed to clone the repo. Make sure Git is installed and the URL is correct.")
-    finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+        run(["git", "merge", "--no-edit", "FETCH_HEAD"])
 
-if __name__ == "__main__":
-    main()
+    if dirty:
+        run(["git", "stash", "pop"])
+
+ap = argparse.ArgumentParser(
+    description="Pull updates like 'git pull', auto-init repo if needed."
+)
+ap.add_argument("repo", help="Git repo URL")
+ap.add_argument("-b", "--branch", default="main", help="Branch to track (default: main)")
+args = ap.parse_args()
+
+ensure_repo(args.repo)
+update(args.branch)
+print("Changes pulled successfully.")
