@@ -228,7 +228,8 @@ class BuilderUI(tk.Tk):
         with open(tf, 'w', encoding='utf-8') as f:
             f.write("\n".join(lines))
 
-        out_name = self.exe_var.get().strip()
+        out_name = self.exe_var.get().strip().removesuffix(".exe")
+        out_file = out_name + ".exe" if not out_name.endswith('.exe') else out_name
         outpth = os.path.join(OUTPUT_DIR, out_name)
         if os.path.isfile(outpth):
             bak = time.strftime('%Y-%m-%d-%H-%M-%S-') + out_name
@@ -252,7 +253,6 @@ class BuilderUI(tk.Tk):
         timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
         invite = f"https://discord.com/oauth2/authorize?client_id={self.bot_id}&permissions=8&scope=bot"
         
-        out_file = out_name+".exe" if not out_name.endswith('.exe') else out_name
         outpth = os.path.join(OUTPUT_DIR, out_file)
         
         if os.path.isfile(outpth):
@@ -264,7 +264,7 @@ class BuilderUI(tk.Tk):
                         sys.executable, installer_py,
                         f'--file={out_file}',
                         f'--icon={self.icon_path}',
-                        f'--name={out_name}-installer'
+                        f'--name={out_name}'
                     ],
                     cwd=OUTPUT_DIR,
                     creationflags=subprocess.CREATE_NEW_CONSOLE,
