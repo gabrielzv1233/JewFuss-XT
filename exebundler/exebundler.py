@@ -1,18 +1,15 @@
-from tkinter import messagebox, Tk
-from ctypes import windll
-import PyElevate
 import subprocess
+import PyElevate
 import tempfile
 import shutil
+import ctypes
 import json
 import sys
 import os
 
-root = Tk()
-root.withdraw()
-
+PyElevate.elevate()
 if not PyElevate.elevated():
-    messagebox.showerror("Permissions error", "Please run as administrator.")
+    ctypes.windll.user32.MessageBoxW(0, "Please run as administrator.", "Permissions error", 0x10)
     sys.exit(0)
 
 if getattr(sys, 'frozen', False):
@@ -43,4 +40,6 @@ try:
     shutil.rmtree(temp_exec_dir, ignore_errors=True)
 
 except Exception as e:
-    messagebox.showerror("Error", "An unknown error has occurred\nYou can try disabling windows defender and running the app again.")
+    ctypes.windll.user32.MessageBoxW(0, "An unknown error has occurred\nYou can try disabling Windows Defender and running the app again.", "Error", 0x10)
+    
+sys.exit(0)
