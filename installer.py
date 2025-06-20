@@ -56,7 +56,7 @@ try:
             f.write(input_exe)
             
         if args.name is not None:
-            installer_name = f'--name "{args.name}"'
+            installer_name = f'--name "{args.name}-installer"'
         else:
             installer_name = f'--name "{input_exe.removesuffix(".exe")}-installer"'
 
