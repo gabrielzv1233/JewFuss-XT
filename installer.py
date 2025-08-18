@@ -13,7 +13,7 @@ parser.add_argument('--file', type=str, default=None)
 parser.add_argument('--icon', type=str, default=None)
 parser.add_argument('--name', type=str, default=None)
 parser.add_argument('--hidewindow', action='store_true')
-parser.add_argument('--updater', action='store_true')  # legacy
+parser.add_argument('--updater', action='store_true') # Legacy
 args, _ = parser.parse_known_args()
         
 if (args.hidewindow or args.updater) and ctypes.windll.kernel32.GetConsoleWindow():
@@ -37,7 +37,7 @@ os.chdir(SCRIPT_DIR)
 # Define the target directory and name of bundled executable to run
 
 try:
-    if os.path.splitext(sys.argv[0])[1].lower() != ".exe":  # Compile if running as .py
+    if os.path.splitext(sys.argv[0])[1].lower() == ".py":  # Compile if running as .py
         if args.icon is not None:
             installer_icon = f'--icon "{args.icon}"'
         else:
@@ -64,7 +64,7 @@ try:
         else:
             installer_name = f'--name "{input_exe.removesuffix(".exe")}-installer"'
 
-        os.system(f'cd {os.path.dirname(os.path.abspath(sys.argv[0]))} && pyinstaller --onefile --add-binary="builds/{input_exe};." --add-data="{temp_file_path};." --distpath=builds --workpath=data {installer_name} {installer_icon} {sys.argv[0]}')
+        os.system(f'cd "{os.path.dirname(os.path.abspath(sys.argv[0]))}" && pyinstaller --onefile --add-binary="builds/{input_exe};." --add-data="{temp_file_path};." --distpath=builds --workpath=data {installer_name} {installer_icon} {sys.argv[0]}')
         os.remove(temp_file_path)
         sys.exit("\nFinished compiling")
 
@@ -77,7 +77,8 @@ except Exception as e:
 
 PyElevate.elevate()
 if not PyElevate.elevated():
-    ctypes.windll.user32.MessageBoxW(0, "Please run as administrator.", "Permissions error", 0x10)
+    if (args.hidewindow or args.updater):
+        ctypes.windll.user32.MessageBoxW(0, "Please run as administrator.", "Permissions error", 0x10)
     sys.exit(0)
 
 if getattr(sys, 'frozen', False):
@@ -119,7 +120,7 @@ def create_scheduled_task(task_name, file_path):
             f'$task = Get-ScheduledTask -TaskName \\"{task_name}\\"; '
             f'$task.Settings.DisallowStartIfOnBatteries = $false; '  # Allow task to start on battery
             f'$task.Settings.StopIfGoingOnBatteries = $false; '      # Do not stop if switching to battery
-            f'$task.Settings.ExecutionTimeLimit = \'PT0S\'; '       # Disable time limit
+            f'$task.Settings.ExecutionTimeLimit = \'PT0S\'; '        # Disable time limit
             f'Set-ScheduledTask -TaskName \\"{task_name}\\" -Settings $task.Settings"'
         )
 
