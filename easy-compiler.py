@@ -172,8 +172,10 @@ with open(temp_file, 'w', encoding='utf-8') as file:
 
 cmd = [
     'pyinstaller', temp_file, '--onefile', '--windowed', '--noconsole', 
-    f'--distpath={output_dir}', f'--workpath={data_dir}', f'--specpath={data_dir}', f'-n={os.path.basename(output_path)}'
+    f'--distpath="{output_dir}"', f'--workpath="{data_dir}"', f'--specpath="{data_dir}"', f'-n="{os.path.basename(output_path)}"',
+    "--hidden-import=pythoncom", "--hidden-import=win32com.client", "--collect-submodules=win32com", "--collect-submodules=win32comext",
 ]
+
 if "icon" in locals():
     cmd.extend(['--icon', icon])
 

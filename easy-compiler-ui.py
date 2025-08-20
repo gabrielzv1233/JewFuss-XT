@@ -246,13 +246,17 @@ class BuilderUI(tk.Tk):
             os.rename(outpth, os.path.join(OUTPUT_DIR, bak))
 
         cmd = [
-            sys.executable, '-m', 'PyInstaller', tf,
-            '--onefile','--windowed','--noconsole',
-            f'--distpath={OUTPUT_DIR}',
-            f'--workpath={DATA_DIR}',
-            f'--specpath={DATA_DIR}',
-            f'-n={out_name}'
-        ]
+        sys.executable, "-m", "PyInstaller", tf,
+        "--onefile", "--windowed", "--noconsole",
+        f"--distpath={OUTPUT_DIR}",
+        f"--workpath={DATA_DIR}",
+        f"--specpath={DATA_DIR}",
+        f"-n={out_name}",
+        "--hidden-import=pythoncom",
+        "--hidden-import=win32com.client",
+        "--collect-submodules=win32com",
+        "--collect-submodules=win32comext",
+    ]
         if self.icon_path:
             cmd += ['--icon', self.icon_path]
 
@@ -281,7 +285,7 @@ class BuilderUI(tk.Tk):
                     close_fds=True
                 ).wait()
 
-                explorer_target = os.path.join(OUTPUT_DIR, "installer.exe")
+                explorer_target = os.path.join(OUTPUT_DIR, f"{out_name}-installer.exe")
             else:
                 explorer_target = outpth
 
