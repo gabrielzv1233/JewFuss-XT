@@ -534,58 +534,87 @@ async def macro(ctx, *, command: str = None):
 
 @bot.command(help="Runs a command using subprocess and streams output live")
 async def cmd(ctx, *, command: str = None):
-    
-    if command is None or command.strip() == "":
+    if not command or not command.strip():
         await ctx.send("Command cannot be empty.")
         return
-    
-    try:
-        process = subprocess.Popen(
-            f'cmd /c "{command}"',
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            errors="replace"
-        )
 
-        buffer = []
+    try:
+        process = subprocess.Popen(f'cmd /c "{command}"', shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+
+        thread = None
         first_output = None
+        pending = []
+        pending_len = 0
+        MAX_MSG = 1900
+        FLUSH_INTERVAL = 0.7
+
+        import time as _t
+        last_flush = _t.monotonic()
+
+        async def ensure_thread():
+            nonlocal thread, first_output
+            if thread is None:
+                current_datetime = datetime.datetime.now().strftime("-%S")
+                base = (command or "")[:100 - len(current_datetime)]
+                name = f"{base}{current_datetime}" or "cmd-output"
+                if first_output and len(f"**Output:**\n{first_output}") <= 2000:
+                    msg = await ctx.send(f"**Output:**\n{first_output}")
+                else:
+                    buf = io.BytesIO((f"**Output:**\n{first_output}" if first_output else "**Output:**").encode("utf-8"))
+                    msg = await ctx.send(file=discord.File(fp=buf, filename="command_output.txt"))
+                thread = await msg.create_thread(name=name)
+
+        async def flush(force=False):
+            nonlocal pending, pending_len, last_flush
+            if not pending:
+                return
+            if not force and (_t.monotonic() - last_flush) < FLUSH_INTERVAL and pending_len < MAX_MSG:
+                return
+            await ensure_thread()
+            chunk = "\n".join(pending)
+            if len(chunk) > 2000:
+                data = io.BytesIO(chunk.encode("utf-8"))
+                await thread.send(file=discord.File(fp=data, filename="command_output.txt"))
+            else:
+                await thread.send(chunk)
+            pending.clear()
+            pending_len = 0
+            last_flush = _t.monotonic()
 
         while True:
-            output = process.stdout.readline()
-            if output == "" and process.poll() is not None:
+            line = process.stdout.readline()
+            if line == "" and process.poll() is not None:
                 break
-            output = output.strip()
-            if output:
-                buffer.append(output)
-                if first_output is None:
-                    first_output = output
-                else:
-                    if 'thread' not in locals():
-                        current_datetime = datetime.datetime.now().strftime("-%S")
-                        unique_thread_name = command[:100-len(current_datetime)]+current_datetime
-                        if len(f"Output:\n{first_output}") > 2000:
-                            buffer_io = io.BytesIO(f"**Output:**\n{first_output}".encode("utf-8"))
-                            msg = await ctx.send(file=discord.File(fp=buffer_io, filename="command_output.txt"))
-                            thread = await msg.create_thread(name=unique_thread_name)
-                        else:
-                            thread = await ctx.send(f"**Output:**\n{first_output}")
-                            thread = await thread.create_thread(name=unique_thread_name)
-                                
-                    if len(output) > 2000:
-                        output_io = io.BytesIO(output.encode("utf-8"))
-                        await thread.send(file=discord.File(fp=output_io, filename="line_output.txt"))
-                    else:
-                        await thread.send(output)
+            if not line:
+                await asyncio.sleep(0.02)
+                await flush()
+                continue
 
-        if first_output and 'thread' not in locals():
+            s = line.rstrip("\r\n")
+            if not s:
+                continue
+
+            if first_output is None:
+                first_output = s
+                continue
+
+            if len(s) > 2000:
+                await ensure_thread()
+                data = io.BytesIO(s.encode("utf-8"))
+                await thread.send(file=discord.File(fp=data, filename="line_output.txt"))
+                continue
+
+            pending.append(s)
+            pending_len += len(s) + 1
+            if pending_len >= MAX_MSG:
+                await flush(force=True)
+            elif (_t.monotonic() - last_flush) >= FLUSH_INTERVAL:
+                await flush()
+
+        if first_output and thread is None:
             await ctx.send(f"**Output:**\n{first_output}")
-            
-        if 'thread' in locals() and len("\n".join(buffer)) > 2000:
-            buffer_io = io.BytesIO("\n".join(buffer).encode("utf-8"))
-            await thread.send(file=discord.File(fp=buffer_io, filename="command_output.txt"))
+
+        await flush(force=True)
 
     except Exception as e:
         await ctx.send(f"Error executing command: {e}")
