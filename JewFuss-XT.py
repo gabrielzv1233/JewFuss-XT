@@ -629,17 +629,32 @@ async def ps(ctx, *, command: str = None):
         ps_exe = shutil.which("pwsh") or shutil.which("powershell") or "powershell"
         ps_boot = "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false); $OutputEncoding = [Console]::OutputEncoding;"
         ps_cmd = [
-            ps_exe, "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass",
+            ps_exe,
+            "-NoLogo",
+            "-NoProfile",
+            "-ExecutionPolicy", "Bypass",
+            "-WindowStyle", "Hidden",
+            "-NonInteractive",
             "-Command", f"{ps_boot}; & {{ {command} }} 2>&1"
         ]
+
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        si.wShowWindow = 0
+        creation = 0
+        if hasattr(subprocess, "CREATE_NO_WINDOW"):
+            creation |= subprocess.CREATE_NO_WINDOW
 
         process = subprocess.Popen(
             ps_cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
             text=True,
             encoding="utf-8",
-            errors="replace"
+            errors="replace",
+            startupinfo=si,
+            creationflags=creation
         )
 
         thread = None
