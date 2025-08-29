@@ -5,6 +5,7 @@ pyinstaller
 discord.py
 PyAutoGUI
 pyperclip
+soundcard
 comtypes
 PyMsgBox
 requests
@@ -13,6 +14,7 @@ pywin32
 Pillow
 psutil
 pynput
+numpy
 plyer
 pycaw
 mss
