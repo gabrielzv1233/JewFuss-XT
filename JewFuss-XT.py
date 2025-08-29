@@ -2172,6 +2172,10 @@ async def estop(ctx):
     os._exit(0)
 
 try:
-    bot.run(TOKEN)
+    bot.run(TOKEN, reconnect=True)
 except discord.errors.LoginFailure:
     exit("\n\033[91mError: Invalid bot token.\033[0m")
+except KeyboardInterrupt:
+    exit("\n\033[91mExiting...\033[0m")
+    bot.close()
+    sys.exit(0)
