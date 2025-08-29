@@ -16,5 +16,4 @@ pynput
 plyer
 pycaw
 mss
-vdf
 WMI

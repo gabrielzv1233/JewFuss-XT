@@ -28,7 +28,6 @@ import base64
 import ctypes
 import psutil
 import shutil
-import glob
 import json
 import time
 import uuid
@@ -36,7 +35,6 @@ import wave
 import cv2
 import mss
 import sys
-import vdf
 import wmi
 import io
 import os
@@ -957,22 +955,67 @@ async def liststartapps(ctx):
 
 @bot.command(help="Lists installed Steam games with paths.")
 async def liststeamapps(ctx):
-    steam_path = os.path.expandvars(r"%PROGRAMFILES(X86)%\Steam")
-    library_vdf_path = os.path.join(steam_path, "steamapps", "libraryfolders.vdf")
+    import os, glob
+    try:
+        import winreg
+    except Exception:
+        winreg = None
+    import vdf
 
-    if not os.path.exists(library_vdf_path):
-        await ctx.send("Could not locate Steam or `libraryfolders.vdf`.")
+    def get_steam_path():
+        paths = []
+        if winreg:
+            try:
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam") as k:
+                    p, _ = winreg.QueryValueEx(k, "SteamPath")
+                    if p: paths.append(p)
+            except Exception:
+                pass
+            for root in (winreg.HKEY_LOCAL_MACHINE,):
+                for sub in (r"SOFTWARE\WOW6432Node\Valve\Steam", r"SOFTWARE\Valve\Steam"):
+                    try:
+                        with winreg.OpenKey(root, sub) as k:
+                            p, _ = winreg.QueryValueEx(k, "InstallPath")
+                            if p: paths.append(p)
+                    except Exception:
+                        pass
+        paths += [
+            os.path.expandvars(r"%PROGRAMFILES(X86)%\Steam"),
+            os.path.expandvars(r"%PROGRAMFILES%\Steam"),
+        ]
+        for p in paths:
+            p = os.path.normpath(p)
+            if os.path.isdir(p):
+                return p
+        return None
+
+    steam_path = get_steam_path()
+    if not steam_path:
+        await ctx.send("Could not locate Steam. Is it installed?")
         return
 
-    with open(library_vdf_path, 'r', encoding='utf-8') as f:
-        data = vdf.load(f)
+    library_vdf_path = os.path.join(steam_path, "steamapps", "libraryfolders.vdf")
+    if not os.path.exists(library_vdf_path):
+        await ctx.send("Could not find `libraryfolders.vdf` in your Steam folder.")
+        return
+
+    try:
+        with open(library_vdf_path, 'r', encoding='utf-8') as f:
+            data = vdf.load(f)
+    except Exception as e:
+        await ctx.send(f"Failed to parse libraryfolders.vdf: {e}")
+        return
 
     libraries = []
-    for key in data.get('libraryfolders', {}):
+    libroot = data.get('libraryfolders', {})
+    for key, val in libroot.items():
         if key.isdigit():
-            path = data['libraryfolders'][key].get('path', '')
+            path = (val.get('path') if isinstance(val, dict) else None) or ""
             if path and os.path.isdir(path):
-                libraries.append(path)
+                libraries.append(os.path.normpath(path))
+
+    if steam_path not in libraries:
+        libraries.append(os.path.normpath(steam_path))
 
     games = []
     gamesunf = []
@@ -987,7 +1030,7 @@ async def liststeamapps(ctx):
                 install_dir = app_state.get('installdir', 'Unknown')
                 full_path = os.path.join(steamapps_path, "common", install_dir)
                 games.append(f'> **{name}** ``{full_path}``')
-                games.append(f'{name} - {full_path}')
+                gamesunf.append(f'{name} - {full_path}')
             except Exception as e:
                 print(f"Failed to parse {manifest_path}: {e}")
 
