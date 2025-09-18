@@ -12,6 +12,8 @@ LOG_FILE = os.path.join(OUTPUT_DIR, 'easy-compiler-build.log')
 LATEST = "https://raw.githubusercontent.com/gabrielzv1233/JewFuss-XT/refs/heads/main/JewFuss-XT.py"
 RECOMMENDED = (3,11,9)
 
+DebugEnableConsole = False  # Set to True to show console in compiled installer
+
 class BuilderUI(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -273,17 +275,14 @@ class BuilderUI(tk.Tk):
             if self.installer_var.get():
                 installer_py = os.path.join(BASE_DIR, "installer.py")
                 print("Building installer")
-                subprocess.Popen(
-                    [
+                args = [
                         sys.executable, installer_py,
+                        '--windowed',
                         f'--file={out_file}',
                         f'--icon={self.icon_path}',
                         f'--name={out_name}'
-                    ],
-                    cwd=OUTPUT_DIR,
-                    creationflags=subprocess.CREATE_NEW_CONSOLE,
-                    close_fds=True
-                ).wait()
+                    ]
+                subprocess.Popen(args, cwd=OUTPUT_DIR, creationflags=subprocess.CREATE_NEW_CONSOLE, close_fds=True).wait()
 
                 explorer_target = os.path.join(OUTPUT_DIR, f"{out_name}-installer.exe")
             else:
