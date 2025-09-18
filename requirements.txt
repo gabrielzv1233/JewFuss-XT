@@ -1,5 +1,5 @@
+cv2.VideoCapture
 PyElevate==0.1.2
-opencv-python
 pycryptodomex
 pyinstaller
 discord.py
@@ -18,4 +18,5 @@ numpy
 plyer
 pycaw
 mss
+vdf
 WMI

