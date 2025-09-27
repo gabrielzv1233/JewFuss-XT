@@ -12,8 +12,6 @@ LOG_FILE = os.path.join(OUTPUT_DIR, 'easy-compiler-build.log')
 LATEST = "https://raw.githubusercontent.com/gabrielzv1233/JewFuss-XT/refs/heads/main/JewFuss-XT.py"
 RECOMMENDED = (3,11,9)
 
-DebugEnableConsole = False  # Set to True to show console in compiled installer
-
 class BuilderUI(tk.Tk):
     def __init__(self):
         super().__init__()
