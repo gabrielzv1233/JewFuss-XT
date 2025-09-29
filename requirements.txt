@@ -1,6 +1,7 @@
 cv2.VideoCapture
 PyElevate==0.1.2
 pycryptodomex
+opencv-python
 pyinstaller
 discord.py
 PyAutoGUI
@@ -15,7 +16,6 @@ Pillow
 psutil
 pynput
 numpy
-plyer
 pycaw
 mss
 vdf
