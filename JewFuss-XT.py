@@ -45,7 +45,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.5.1" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.6.0" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -2257,38 +2257,43 @@ async def help(ctx, command_name: str):
     else:
         await ctx.send(f"Command '{command_name}' not found.")
 
-per_page = 10
-
 @bot.command(help="List bot commands in alphabetical order", usage="$commands")
 async def commands(ctx, page: int = 1):
+    per_page = 10
     commands_list = list(bot.commands)
     commands_list.sort(key=lambda cmd: cmd.name)
 
     max_page = (len(commands_list) - 1) // per_page + 1
-
     if page < 1 or page > max_page:
         await ctx.send(f"Page {page} is out of range. Please provide a page number between 1 and {max_page}.")
         return
 
-    start_index = (page - 1) * per_page
-    end_index = start_index + per_page
-    commands_on_page = commands_list[start_index:end_index]
+    def render_page(page_num: int):
+        start = (page_num - 1) * per_page
+        end = start + per_page
+        page_cmds = commands_list[start:end]
 
-    embed = discord.Embed(
-        title="Available Commands",
-        description="List of all commands",
-        color=0x007BFF
-    )
+        embed = discord.Embed(title="Available Commands", description="List of all commands", color=0x007BFF)
 
-    for command in commands_on_page:
-        embed.add_field(
-            name=command.name,
-            value=command.help if command.help else "No description provided",
-            inline=False
-        )
+        for cmd in page_cmds:
+            primary = cmd.name
+            aliases = list(cmd.aliases) if getattr(cmd, "aliases", None) else []
+            title = ", ".join(dict.fromkeys([primary] + aliases))
 
-    embed.set_footer(text=f"Page {page}/{max_page}")
+            parts = []
+            if getattr(cmd, "usage", None):
+                parts.append(f"`{cmd.usage}`")
+            if getattr(cmd, "help", None):
+                parts.append(cmd.help)
 
+            value = "\n".join(parts)
+            if value:
+                embed.add_field(name=title, value=value, inline=False)
+
+        embed.set_footer(text=f"Page {page_num}/{max_page}")
+        return embed
+
+    embed = render_page(page)
     message = await ctx.send(embed=embed)
 
     if max_page > 1:
@@ -2300,33 +2305,18 @@ async def commands(ctx, page: int = 1):
 
     while True:
         try:
-            reaction, user = await bot.wait_for("reaction_add", check=check)
+            reaction, user = await bot.wait_for("reaction_add", check=check, timeout=60)
             await message.remove_reaction(reaction, user)
-            
+
             if str(reaction.emoji) == "◀️" and page > 1:
                 page -= 1
             elif str(reaction.emoji) == "▶️" and page < max_page:
                 page += 1
-            
-            start_index = (page - 1) * per_page
-            end_index = start_index + per_page
-            commands_on_page = commands_list[start_index:end_index]
 
-            embed.clear_fields()
-            for command in commands_on_page:
-                embed.add_field(
-                    name=command.name,
-                    value=command.help if command.help else "No description provided",
-                    inline=False
-                )
-            
-            embed.set_footer(text=f"Page {page}/{max_page}")
-
-            await message.edit(embed=embed)
-
+            await message.edit(embed=render_page(page))
         except asyncio.TimeoutError:
             break
-        
+
 @bot.command(help="Force stops the bot.", usage="$estop")
 async def estop(ctx):
     await ctx.send("Force stopping bot...")
