@@ -177,6 +177,8 @@ class BuilderUI(tk.Tk):
             messagebox.showwarning("Python version", f"Using {cv}, recommended {RECOMMENDED}")
             print(f"Warning: Python {cv}, recommended {RECOMMENDED}")
 
+    LocVer = ""
+
     def check_update(self):
         try:
             lines = urllib.request.urlopen(LATEST).read().decode().splitlines()
@@ -260,7 +262,12 @@ class BuilderUI(tk.Tk):
         if self.icon_path:
             cmd += ['--icon', self.icon_path]
 
-        print("Building JewFuss-XT")
+        
+        for l in open(TEMPLATE, encoding='utf-8'):
+            if "- 25c75g" in l:
+                print("Building JewFuss-XT v" + re.search(r'version\s*=\s*"([\d.]+)"', l).group(1))
+                break
+
         subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_CONSOLE, close_fds=True).wait()
         shutil.rmtree(tmpd)
 
