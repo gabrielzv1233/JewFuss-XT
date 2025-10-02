@@ -2304,11 +2304,9 @@ async def commands(ctx, page: int = 1):
         await message.add_reaction("◀️")
         await message.add_reaction("▶️")
 
-    def check(reaction, user):
-        return user == ctx.author and str(reaction.emoji) in ["◀️", "▶️"] and reaction.message.id == message.id
-
     while True:
         try:
+            check = user == ctx.author and str(reaction.emoji) in ["◀️", "▶️"] and reaction.message.id == message.id
             reaction, user = await bot.wait_for("reaction_add", check=check)
             await message.remove_reaction(reaction, user)
 
