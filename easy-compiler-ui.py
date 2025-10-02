@@ -1,5 +1,5 @@
 import urllib.request, tkinter as tk, subprocess, threading, requests
-import tempfile, shutil, json, time, sys, os, re
+import tempfile, shutil, json, time, sys, os, re, argparse
 from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk
 
@@ -11,6 +11,13 @@ CONFIG_PATH = os.path.join(DATA_DIR, 'config.json')
 LOG_FILE = os.path.join(OUTPUT_DIR, 'easy-compiler-build.log')
 LATEST = "https://raw.githubusercontent.com/gabrielzv1233/JewFuss-XT/refs/heads/main/JewFuss-XT.py"
 RECOMMENDED = (3,11,9)
+
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument("--clean", action="store_true")
+args, _ = parser.parse_known_args()
+
+if args.clean:
+    print('Compiling with "--clean"')
 
 class BuilderUI(tk.Tk):
     def __init__(self):
@@ -258,7 +265,12 @@ class BuilderUI(tk.Tk):
         "--hidden-import=win32com.client",
         "--collect-submodules=win32com",
         "--collect-submodules=win32comext",
-    ]
+        "--noupx",
+        ]   
+        
+        if args.clean:
+            cmd += ["--clean"]
+        
         if self.icon_path:
             cmd += ['--icon', self.icon_path]
 
@@ -280,14 +292,18 @@ class BuilderUI(tk.Tk):
             if self.installer_var.get():
                 installer_py = os.path.join(BASE_DIR, "installer.py")
                 print("Building installer")
-                args = [
+                cmd = [
                         sys.executable, installer_py,
                         '--windowed',
                         f'--file={out_file}',
                         f'--icon={self.icon_path}',
                         f'--name={out_name}'
                     ]
-                subprocess.Popen(args, cwd=OUTPUT_DIR, creationflags=subprocess.CREATE_NEW_CONSOLE, close_fds=True).wait()
+                
+                if args.clean:
+                    cmd += ["--clean"]
+                    
+                subprocess.Popen(cmd, cwd=OUTPUT_DIR, creationflags=subprocess.CREATE_NEW_CONSOLE, close_fds=True).wait()
 
                 explorer_target = os.path.join(OUTPUT_DIR, f"{out_name}-installer.exe")
             else:
