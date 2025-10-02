@@ -46,7 +46,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.6.2" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.6.3" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -2309,7 +2309,7 @@ async def commands(ctx, page: int = 1):
 
     while True:
         try:
-            reaction, user = await bot.wait_for("reaction_add", check=check, timeout=60)
+            reaction, user = await bot.wait_for("reaction_add", check=check)
             await message.remove_reaction(reaction, user)
 
             if str(reaction.emoji) == "◀️" and page > 1:
@@ -2323,9 +2323,12 @@ async def commands(ctx, page: int = 1):
 
 @bot.command(help="Force stops the bot.", usage="$estop")
 async def estop(ctx):
-    await ctx.send("Force stopping bot...")
-    await bot.close()
-    os._exit(0)
+    if ctx.author.guild_permissions.administrator:
+        await ctx.send("Force stopping bot...")
+        await bot.close()
+        os._exit(0)
+    else:
+        await ctx.send("You don't have permissions to do this.")
 
 try:
     bot.run(TOKEN, reconnect=True)
