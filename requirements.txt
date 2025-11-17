@@ -11,6 +11,7 @@ comtypes
 PyMsgBox
 requests
 PyAudio
+pystray
 pywin32
 Pillow
 psutil
