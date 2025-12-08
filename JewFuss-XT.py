@@ -49,7 +49,7 @@ import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
 version = "1.0.8.2" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
-USE_TRAY_ICON = False # Enables Tray icon allowing you to exit the bot on the desktop easily, used for testing or if used as a remote desktop tool | Default: False
+USE_TRAY_ICON = False # Enables Tray icon allowing you to exit the bot on the desktop easily, used for testing or if used as a remote desktop tool | Default: False - 28f93g
 
 intents = discord.Intents.all()
 
