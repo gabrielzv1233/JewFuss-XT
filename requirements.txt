@@ -1,4 +1,3 @@
-cv2.VideoCapture
 PyElevate==0.1.2
 pycryptodomex
 opencv-python
