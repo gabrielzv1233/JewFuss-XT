@@ -176,7 +176,7 @@ async def ping(ctx):
 async def ver(ctx):
     global version
     embed = discord.Embed(color=discord.Color.blue())
-    embed.add_field(name="Version", value=f"`{version}`", inline=False)
+    embed.add_field(name="Version", value=f"**{version}**", inline=False)
     await ctx.send(embed=embed)    
 
 @bot.command(help="Shows victims device status including uptime, resource usage, etc.", usage="$status")
@@ -233,7 +233,7 @@ def check_permissions(file_path):
     }
     return permissions
 
-@bot.command(aliases=['sleepdisplay'], help="Put displays into sleep mode", usage="$displaysleep")
+@bot.command(aliases=['sleepdisplay', 'ds'], help="Put displays into sleep mode", usage="$displaysleep")
 async def displaysleep(ctx):
     await ctx.send("Putting displays to sleep")
 
