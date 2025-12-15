@@ -143,9 +143,13 @@ class BuilderUI(tk.Tk):
         self.last_session = last
 
     def _bump_preset(self, token: str):
+        PresetToBottom = True # Can't decide if i want current preset at top or bottom, so True for bottom, False for top
         if token in self.preset_order:
             self.preset_order.remove(token)
-        self.preset_order.append(token)
+        if PresetToBottom: 
+            self.preset_order.append(token)
+        else:
+            self.preset_order.insert(0, token)
         self.preset_combo["values"] = self.preset_order
         
     def save_preset(self):

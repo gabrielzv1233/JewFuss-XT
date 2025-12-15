@@ -17,6 +17,7 @@ JustTTS.spec
 /archive/JewFuss-XT-Updater/data
 /archive/JewFuss-XT-Updater/builds
 /archive/JewFuss-XT-Updater/JustTTS.spec
+/__pycache__
 Updater.exe.spec
 installer.spec
 executablename.txt
