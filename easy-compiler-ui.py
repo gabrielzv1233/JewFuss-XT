@@ -1,4 +1,3 @@
-# was in a local branch so lost all my commits :(, basically: added prefixes (yipeee), added a bit more error logging such as if TOKEN string is missing and blah blah blah
 import urllib.request, tkinter as tk, subprocess, threading, requests
 import tempfile, shutil, json, time, sys, os, re, argparse, hashlib
 from tkinter import ttk, filedialog, messagebox
@@ -67,6 +66,19 @@ class BuilderUI(tk.Tk):
 
         self.token_var.trace_add('write', lambda *a: self.on_token_change())
         threading.Thread(target=self.boot_validate, daemon=True).start()
+        
+    def to_foreground(self):
+        try:
+            self.deiconify()
+        
+            self.update_idletasks()
+            self.lift()
+            self.focus_force()
+        
+            self.attributes("-topmost", True)
+            self.after(120, lambda: self.attributes("-topmost", False))
+        except Exception as e:
+            print("Error bringing app to foreground:", e)
 
     def load_config(self):
         self.last_session = {
@@ -163,7 +175,8 @@ class BuilderUI(tk.Tk):
     def save_preset(self):
         token = self.token_var.get().strip()
         if not token:
-            messagebox.showerror("Error", "Token is empty, cannot save preset")
+            self.to_foreground()
+            messagebox.showerror("Error", "Token is empty, cannot save preset", parent=self)
             return
 
         icon_file = None
@@ -180,7 +193,8 @@ class BuilderUI(tk.Tk):
                 self.show_icon(dest_path)
             except Exception as e:
                 print(f"Failed to save preset icon: {e}")
-                messagebox.showwarning("Icon error", "Failed to save icon for preset, preset will be saved without icon")
+                self.to_foreground()
+                messagebox.showwarning("Icon error", "Failed to save icon for preset, preset will be saved without icon", parent=self)
 
         preset = {
             "token": token,
@@ -440,7 +454,8 @@ class BuilderUI(tk.Tk):
     def check_python(self):
         cv = sys.version_info[:3]
         if cv != RECOMMENDED:
-            messagebox.showwarning("Python version", f"Using {cv}, recommended {RECOMMENDED}")
+            self.to_foreground()
+            messagebox.showwarning("Python version", f"Using {cv}, recommended {RECOMMENDED}", parent=self)
             print(f"Warning: Python {cv}, recommended {RECOMMENDED}")
 
     def check_update(self):
@@ -458,7 +473,8 @@ class BuilderUI(tk.Tk):
                             local = re.search(r'version\s*=\s*"([\d.]+)"', l).group(1)
                             break
             if remote and local and tuple(map(int, local.split("."))) < tuple(map(int, remote.split("."))):
-                messagebox.showinfo("Update available", f"{local} → {remote}")
+                self.to_foreground()
+                messagebox.showinfo("Update available", f"{local} → {remote}", parent=self)
                 print(f"Update available: {local} → {remote}")
         except Exception as e:
             print("Update check failed:", e)
@@ -483,7 +499,8 @@ class BuilderUI(tk.Tk):
     def build(self):
         self.save_config()
         if not self.token_valid:
-            messagebox.showerror("Error", "Invalid token")
+            self.to_foreground()
+            messagebox.showerror("Error", "Invalid token", parent=self)
             return
 
         if self.icon_path:
@@ -586,7 +603,9 @@ class BuilderUI(tk.Tk):
                     if "- 25c75g" in l:
                         version_match = re.search(r'version\s*=\s*"([\d.]+)"', l)
                         if version_match:
-                            print("Building JewFuss-XT v" + version_match.group(1))
+                            version = version_match.group(1)
+                            print("Building JewFuss-XT v" + version)
+                            
                         break
         except Exception as e:
             print(f"Error reading version from template: {e}")
@@ -657,8 +676,9 @@ class BuilderUI(tk.Tk):
                 with open(LOG_FILE, 'a', encoding='utf-8') as log_file:
                     log_file.write(
                         f"\"{timestamp}\": TOKEN = \"{self.token_var.get().strip()}\" "
-                        f"({self.bot_username or 'Unknown'}) - {out_name}\n"
+                        f"({self.bot_username or 'Unknown'}) - {out_name} v{version}\n"
                     )
+                del version
             except Exception as e:
                 print(f"Error writing log file '{LOG_FILE}': {e}")
 
@@ -666,8 +686,8 @@ class BuilderUI(tk.Tk):
                 msg = f"Compiled JewFuss-XT as {self.bot_username or 'Unknown bot'}"
                 if invite:
                     msg += "\nCheck console for invite link"
-                messagebox.showinfo("Build Complete", msg)
-
+                self.to_foreground()
+                messagebox.showinfo("Build Complete", msg, parent=self)
             self.after(0, _show_ok)
         else:
             print("Error: JewFuss-XT was unable to compile")
