@@ -54,7 +54,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.9.5" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.9.6" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 USE_TRAY_ICON = False # Enables Tray icon allowing you to exit the bot on the desktop easily, used for testing or if used as a remote desktop tool | Default: False - 28f93g
 
 intents = discord.Intents.all()
@@ -64,18 +64,18 @@ bot.remove_command('help')
 pyautogui.FAILSAFE = False
 
 async def fm_send(ctx, content: str, alt_content: str = None, filename: str = "output.txt", header=""):
-    if len(header + header) > 2000:
+    if len(header + ("\n" if header.strip() else "") + content) > 2000:
         buf = io.BytesIO((alt_content or content).encode("utf-8"))
-        await ctx.send(header, file=discord.File(fp=buf, filename=filename))
+        await ctx.send(header[:2000], file=discord.File(fp=buf, filename=filename))
     else:
-        await ctx.send(header + content)
+        await ctx.send((header + "\n" if header.strip() else "") + content)
 
 async def fm_reply(ctx, content: str, alt_content: str = None, filename: str = "output.txt", header=""):
-    if len(header + content) > 2000:
+    if len(header + ("\n" if header.strip() else "") + content) > 2000:
         buf = io.BytesIO((alt_content or content).encode("utf-8"))
-        await ctx.reply(header, file=discord.File(fp=buf, filename=filename))
+        await ctx.reply(header[:2000], file=discord.File(fp=buf, filename=filename))
     else:
-        await ctx.reply(header + content)
+        await ctx.reply((header + "\n" if header.strip() else "") + content)
 
 commands.Context.fm_send = fm_send
 commands.Context.fm_reply = fm_reply
