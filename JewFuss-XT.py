@@ -54,7 +54,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.9.7" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.10.0" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 USE_TRAY_ICON = False # Enables Tray icon allowing you to exit the bot on the desktop easily, used for testing or if used as a remote desktop tool | Default: False - 28f93g
 
 intents = discord.Intents.all()
@@ -2938,10 +2938,24 @@ async def help(ctx, command_name: str):
     else:
         await ctx.send(f"Command '{command_name}' not found.")
 
-@bot.command(help="List bot commands in alphabetical order", usage="$commands")
-async def commands(ctx, page: int = 1):
+@bot.command(help="List bot commands in alphabetical order", usage="$commands [search]")
+async def commands(ctx, search: str = ""):
+    page = 1 # removed page: int = 1 arg
     per_page = 10
-    commands_list = list(bot.commands)
+    search_norm = search.lower().replace(" ", "")
+
+    commands_list = [
+        cmd for cmd in bot.commands
+        if not search_norm or any(search_norm in t.lower().replace(" ", "")
+        for t in [cmd.name] + list(cmd.aliases))
+    ]
+
+    if not len(commands_list) > 0:
+        embed = discord.Embed(title="No commands found", description=f"No commands found containing `{search.strip()[:4065]}`", color=0xED4245)
+        embed.set_footer(text=f"Leave search blank to show all commands.")
+        message = await ctx.send(embed=embed)
+        return
+    
     commands_list.sort(key=lambda cmd: cmd.name)
 
     max_page = (len(commands_list) - 1) // per_page + 1
