@@ -1,5 +1,5 @@
-import subprocess, PyElevate, argparse, shutil, psutil, time, sys, os
-
+import subprocess, PyElevate, argparse, ctypes, shutil, psutil, time, sys, os
+                                        
 parser = argparse.ArgumentParser(add_help=False)
 parser.add_argument('--file', type=str, default=None)
 parser.add_argument('--icon', type=str, default=None)
@@ -37,6 +37,8 @@ try:
             installer_name = f'--name "{args.name}-installer"'
         else:
             installer_name = f'--name "{input_exe.removesuffix(".exe")}-installer"'
+        
+        ctypes.windll.kernel32.SetConsoleTitleW("Compiling installer...")
         os.system(
             f'cd "{os.path.dirname(os.path.abspath(sys.argv[0]))}" && '
             f'pyinstaller --onefile '
