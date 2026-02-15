@@ -26,3 +26,4 @@ test.py
 *.log
 /exebundler/data
 /exebundler/builds
+.vscode/

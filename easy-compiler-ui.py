@@ -2,6 +2,7 @@ import urllib.request, tkinter as tk, subprocess, threading, requests
 import tempfile, shutil, json, time, sys, os, re, argparse, hashlib
 from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk
+import importlib.util
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -22,6 +23,19 @@ if args.clean:
 
 if args.debug:
     print('Launched with Debug mode enabled')
+
+def load_version(file_path: str=TEMPLATE) -> str:
+        module_name = re.sub(r"\W+", "_", os.path.splitext(os.path.basename(file_path))[0]) + "_dynamic"
+        
+        if module_name in sys.modules:
+            del sys.modules[module_name]
+
+        spec = importlib.util.spec_from_file_location(module_name, file_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+
+        return module.version
 
 class BuilderUI(tk.Tk):
     LocVer = ""
@@ -462,16 +476,15 @@ class BuilderUI(tk.Tk):
         try:
             lines = urllib.request.urlopen(LATEST).read().decode().splitlines()
             remote = next(
-                (re.search(r'version\s*=\s*"([\d.]+)"', l).group(1) for l in lines if "- 25c75g" in l),
-                None,
-            )
-            local = None
-            if os.path.isfile(TEMPLATE):
-                with open(TEMPLATE, encoding='utf-8') as f:
-                    for l in f:
-                        if "- 25c75g" in l:
-                            local = re.search(r'version\s*=\s*"([\d.]+)"', l).group(1)
-                            break
+               (
+                   m.group(2)
+                   for l in lines
+                   if "- 25c75g" in l
+                   if (m := re.search(r'version\s*=\s*([\'"])([^\'"]+)\1', l))
+               ),
+               None,
+)
+            local = load_version()
             if remote and local and tuple(map(int, local.split("."))) < tuple(map(int, remote.split("."))):
                 self.to_foreground()
                 messagebox.showinfo("Update available", f"{local} → {remote}", parent=self)
@@ -515,7 +528,7 @@ class BuilderUI(tk.Tk):
         self.disable_inputs()
         print("Starting buildprocess")
         threading.Thread(target=self.run_build, daemon=True).start()
-
+    
     def run_build(self):
         try:
             lines = open(TEMPLATE, 'r', encoding='utf-8').read().splitlines()
@@ -598,15 +611,9 @@ class BuilderUI(tk.Tk):
             cmd += ["--icon", self.icon_path]
 
         try:
-            with open(TEMPLATE, encoding='utf-8') as f:
-                for l in f:
-                    if "- 25c75g" in l:
-                        version_match = re.search(r'version\s*=\s*"([\d.]+)"', l)
-                        if version_match:
-                            version = version_match.group(1)
-                            print("Building JewFuss-XT v" + version)
-                            
-                        break
+            version = load_version()
+            print("Building JewFuss-XT v" + version)
+            
         except Exception as e:
             print(f"Error reading version from template: {e}")
 
