@@ -1,7 +1,9 @@
 import urllib.request, tkinter as tk, subprocess, threading, requests
-import tempfile, shutil, json, time, sys, os, re, argparse, hashlib
+import tempfile, shutil, json, time, sys, os, re, argparse, hashlib, signal
 from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk
+from pathlib import Path
+from rich import print
 import importlib.util
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -19,10 +21,9 @@ parser.add_argument("--debug", action="store_true")
 args, _ = parser.parse_known_args()
 
 if args.clean:
-    print('Compiling with "--clean"')
-
+    print('[yellow]Compiling with "--clean"')
 if args.debug:
-    print('Launched with Debug mode enabled')
+    print('[yellow]Launched with Debug mode enabled')
 
 def load_version(file_path: str=TEMPLATE) -> str:
         module_name = re.sub(r"\W+", "_", os.path.splitext(os.path.basename(file_path))[0]) + "_dynamic"
@@ -36,6 +37,11 @@ def load_version(file_path: str=TEMPLATE) -> str:
         spec.loader.exec_module(module)
 
         return module.version
+    
+def rel_path(path):
+    script_dir = Path(sys.argv[0]).resolve().parent
+    target = Path(path).resolve()
+    return os.path.relpath(target, start=script_dir)
 
 class BuilderUI(tk.Tk):
     LocVer = ""
@@ -47,7 +53,7 @@ class BuilderUI(tk.Tk):
         self.geometry(str(size[0]) + "x" + str(size[1]))
         self.minsize(size[0], size[1])
 
-        self.protocol("WM_DELETE_WINDOW", lambda: (self.save_config(), self.destroy()))
+        self.protocol("WM_DELETE_WINDOW", self.shutdown)
 
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
@@ -80,6 +86,12 @@ class BuilderUI(tk.Tk):
 
         self.token_var.trace_add('write', lambda *a: self.on_token_change())
         threading.Thread(target=self.boot_validate, daemon=True).start()
+
+    def shutdown(self):
+        try:
+            self.save_config()
+        finally:
+            self.destroy()
         
     def to_foreground(self):
         try:
@@ -92,7 +104,7 @@ class BuilderUI(tk.Tk):
             self.attributes("-topmost", True)
             self.after(120, lambda: self.attributes("-topmost", False))
         except Exception as e:
-            print("Error bringing app to foreground:", e)
+            print("[red]Error bringing app to foreground:", e)
 
     def load_config(self):
         self.last_session = {
@@ -110,7 +122,7 @@ class BuilderUI(tk.Tk):
             try:
                 with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
                     raw = json.load(f)
-                print("Config loaded:", raw)
+                    print(f"[yellow]Loading config: [blue]{rel_path(CONFIG_PATH)}")
 
                 if "presets" in raw or "last" in raw:
                     self.presets = raw.get("presets", {})
@@ -146,7 +158,7 @@ class BuilderUI(tk.Tk):
                         break
 
             except Exception as e:
-                print(f"Error loading config: {e}")
+                print(f"[red]Error loading config: {e}")
 
     def save_config(self):
         try:
@@ -158,7 +170,7 @@ class BuilderUI(tk.Tk):
                 "icon_file": self.icon_path if self.icon_path else None,
             }
         except Exception as e:
-            print(f"Error collecting last session data for config: {e}")
+            print(f"[red]Error collecting last session data for config: {e}")
             last = self.last_session
     
         data = {
@@ -170,9 +182,9 @@ class BuilderUI(tk.Tk):
         try:
             with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2)
-            print("Config saved")
+            print("[green]Config saved")
         except Exception as e:
-            print(f"Error saving config: {e}")
+            print(f"[red]Error saving config: {e}")
     
         self.last_session = last
 
@@ -206,7 +218,7 @@ class BuilderUI(tk.Tk):
                 self.icon_path = dest_path
                 self.show_icon(dest_path)
             except Exception as e:
-                print(f"Failed to save preset icon: {e}")
+                print(f"[red]Failed to save preset icon: {e}")
                 self.to_foreground()
                 messagebox.showwarning("Icon error", "Failed to save icon for preset, preset will be saved without icon", parent=self)
 
@@ -234,7 +246,7 @@ class BuilderUI(tk.Tk):
         try:
             del self.presets[token]
         except Exception as e:
-            print(f"Error deleting preset '{token}': {e}")
+            print(f"[red]Error deleting preset '{token}': {e}")
 
         if token in self.preset_order:
             self.preset_order.remove(token)
@@ -276,7 +288,7 @@ class BuilderUI(tk.Tk):
         else:
             self.icon_btn.config(image="", text="Choose Icon")
 
-        print("Loaded preset")
+        print("[green]Loaded preset")
 
         self._bump_preset(token)
 
@@ -342,7 +354,7 @@ class BuilderUI(tk.Tk):
         if icon_to_load:
             self.icon_path = icon_to_load
             self.show_icon(icon_to_load)
-            print(f"Loaded icon from {icon_to_load}")
+            print(f"[green]Loaded icon from: [blue]{rel_path(icon_to_load)}")
 
         self.tray_var = tk.BooleanVar(value=bool(self.last_session.get("use_tray_icon", False)))
         self.cb_tray = ttk.Checkbutton(
@@ -423,7 +435,7 @@ class BuilderUI(tk.Tk):
                 self.bot_username = None
                 self.bot_id = None
                 self.token_valid = False
-                print("Token validation error:", e)
+                print("[bold #ff0000]Token validation error:", e)
                 self.after(0, lambda: self.token_label_var.set("Bot token: (Invalid)"))
                 self.after(0, lambda: self.token_err.set("API error"))
             self.after(0, self.update_build_state)
@@ -448,7 +460,7 @@ class BuilderUI(tk.Tk):
                 try:
                     w.config(state="disabled")
                 except Exception as e:
-                    print(f"Error disabling widget {w}: {e}")
+                    print(f"[red]Error disabling widget {w}: {e}")
 
     def enable_inputs(self):
         for w in (
@@ -462,7 +474,7 @@ class BuilderUI(tk.Tk):
                 try:
                     w.config(state="normal")
                 except Exception as e:
-                    print(f"Error enabling widget {w}: {e}")
+                    print(f"[red]Error enabling widget {w}: {e}")
         self.update_build_state()
 
     def check_python(self):
@@ -470,7 +482,7 @@ class BuilderUI(tk.Tk):
         if cv != RECOMMENDED:
             self.to_foreground()
             messagebox.showwarning("Python version", f"Using {cv}, recommended {RECOMMENDED}", parent=self)
-            print(f"Warning: Python {cv}, recommended {RECOMMENDED}")
+            print(f"[#f05e1b]Warning: Python {cv}, recommended {RECOMMENDED}")
 
     def check_update(self):
         try:
@@ -488,16 +500,16 @@ class BuilderUI(tk.Tk):
             if remote and local and tuple(map(int, local.split("."))) < tuple(map(int, remote.split("."))):
                 self.to_foreground()
                 messagebox.showinfo("Update available", f"{local} → {remote}", parent=self)
-                print(f"Update available: {local} → {remote}")
+                print(f"[yellow]Update available: [blue]{local} [yellow]→ [blue]{remote}")
         except Exception as e:
-            print("Update check failed:", e)
+            print("[#f05e1b]Update check failed:", e)
 
     def choose_icon(self):
         p = filedialog.askopenfilename(filetypes=[("Images", "*.ico *.png *.jpg")])
         if p:
             self.icon_path = p
             self.show_icon(p)
-            print(f"Icon selected: {p}")
+            print(f"[yellow]Icon selected: {p}")
 
     def show_icon(self, path: str):
         try:
@@ -506,7 +518,7 @@ class BuilderUI(tk.Tk):
             self.tkimg = ImageTk.PhotoImage(img)
             self.icon_btn.config(image=self.tkimg, text="")
         except Exception as e:
-            print(f"Error showing icon '{path}': {e}")
+            print(f"[bold #ff0000]Error showing icon '{path}': {e}")
             self.icon_btn.config(image="", text="Choose Icon")
 
     def build(self):
@@ -521,19 +533,19 @@ class BuilderUI(tk.Tk):
                 dest = os.path.join(DATA_DIR, "prev_icon.ico")
                 if os.path.abspath(self.icon_path) != os.path.abspath(dest):
                     shutil.copyfile(self.icon_path, dest)
-                    print(f"Saved icon to {dest} for reuse")
+                    print(f"[green]Saved icon to {dest} for reuse")
             except Exception as e:
-                print(f"Failed to save prev_icon.ico: {e}")
+                print(f"[red]Failed to save prev_icon.ico: {e}")
 
         self.disable_inputs()
-        print("Starting buildprocess")
+        print("[blue]Starting buildprocess")
         threading.Thread(target=self.run_build, daemon=True).start()
     
     def run_build(self):
         try:
             lines = open(TEMPLATE, 'r', encoding='utf-8').read().splitlines()
         except Exception as e:
-            print(f"Error reading template '{TEMPLATE}': {e}")
+            print(f"[bold #ff0000]Error reading template '{TEMPLATE}': {e}")
             self.after(0, self.enable_inputs)
             return
 
@@ -545,7 +557,7 @@ class BuilderUI(tk.Tk):
                 break
 
         if not replaced_token:
-            print("TOKEN marker ' - 23r98h' not found in template")
+            print("[bold #ff0000]TOKEN marker ' - 23r98h' not found in template")
 
         replaced_tray = False
         tray_value = "True" if self.tray_var.get() else "False"
@@ -556,7 +568,7 @@ class BuilderUI(tk.Tk):
                 break
 
         if not replaced_tray:
-            print("USE_TRAY_ICON marker ' - 28f93g' not found in template")
+            print("[bold #ff0000]USE_TRAY_ICON marker ' - 28f93g' not found in template")
 
         tmpd = tempfile.mkdtemp()
         tf = os.path.join(tmpd, 'temp.py')
@@ -564,13 +576,13 @@ class BuilderUI(tk.Tk):
             with open(tf, 'w', encoding='utf-8') as f:
                 f.write("\n".join(lines))
         except Exception as e:
-            print(f"Error writing temporary file '{tf}': {e}")
+            print(f"[bold #ff0000]Error writing temporary file '{tf}': {e}")
             shutil.rmtree(tmpd, ignore_errors=True)
             self.after(0, self.enable_inputs)
             return
         
         if args.debug:
-            print("[Debug]: Keeping uncompiled script in builds folder")
+            print("[magenta3]Keeping uncompiled script in builds folder")
             shutil.copyfile(tf, os.path.join(OUTPUT_DIR, "unpackaged-latest.py"))
         
         out_name = self.exe_var.get().strip().removesuffix(".exe")
@@ -612,10 +624,11 @@ class BuilderUI(tk.Tk):
 
         try:
             version = load_version()
-            print("Building JewFuss-XT v" + version)
+            print("[blue]Building JewFuss-XT [yellow]v" + version)
             
         except Exception as e:
-            print(f"Error reading version from template: {e}")
+            version = 0
+            print(f"[red]Error reading version from template: {e}")
 
         try:
             subprocess.Popen(
@@ -641,7 +654,7 @@ class BuilderUI(tk.Tk):
         if os.path.isfile(built_exe):
             if self.installer_var.get():
                 installer_py = os.path.join(BASE_DIR, "installer.py")
-                print("Building installer")
+                print("[green]Building installer")
                 cmd = [
                     sys.executable,
                     installer_py,
@@ -663,7 +676,7 @@ class BuilderUI(tk.Tk):
                         close_fds=True,
                     ).wait()
                 except Exception as e:
-                    print(f"Error building installer: {e}")
+                    print(f"[bold #ff0000]Error building installer: {e}")
 
                 explorer_target = os.path.join(OUTPUT_DIR, f"{out_name}-installer.exe")
             else:
@@ -672,12 +685,12 @@ class BuilderUI(tk.Tk):
             try:
                 os.system(f'explorer /select,"{explorer_target}"')
             except Exception as e:
-                print(f"Error opening Explorer for '{explorer_target}': {e}")
+                print(f"[red]Error opening Explorer for '{explorer_target}': {e}")
 
             time.sleep(0.5)
             print(f"\nCompiled JewFuss-XT as {self.bot_username or 'Unknown bot'}")
             if invite:
-                print(f"Bot invite link: {invite}")
+                print(f"[yellow]Bot invite link: {invite}")
 
             try:
                 with open(LOG_FILE, 'a', encoding='utf-8') as log_file:
@@ -687,7 +700,7 @@ class BuilderUI(tk.Tk):
                     )
                 del version
             except Exception as e:
-                print(f"Error writing log file '{LOG_FILE}': {e}")
+                print(f"[red]Error writing log file '{LOG_FILE}': {e}")
 
             def _show_ok():
                 msg = f"Compiled JewFuss-XT as {self.bot_username or 'Unknown bot'}"
@@ -697,15 +710,23 @@ class BuilderUI(tk.Tk):
                 messagebox.showinfo("Build Complete", msg, parent=self)
             self.after(0, _show_ok)
         else:
-            print("Error: JewFuss-XT was unable to compile")
+            print("[bold #ff0000]Error: JewFuss-XT was unable to compile")
 
         self.after(0, self.enable_inputs)
 
 
 if __name__ == "__main__":
     app = BuilderUI()
-    try:
-        app.mainloop()
-    except KeyboardInterrupt:
-        app.save_config()
-        sys.exit(0)
+
+    def _handle_sigint(_signum, _frame):
+        app.after(0, app.shutdown)
+
+    signal.signal(signal.SIGINT, _handle_sigint)
+
+    # Keep Tk event loop waking up so Python can process SIGINT on Windows.
+    def _poll_signals():
+        if app.winfo_exists():
+            app.after(200, _poll_signals)
+
+    app.after(200, _poll_signals)
+    app.mainloop()

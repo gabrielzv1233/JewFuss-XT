@@ -17,6 +17,7 @@ psutil
 pynput
 numpy
 pycaw
+rich
 mss
 vdf
 WMI
