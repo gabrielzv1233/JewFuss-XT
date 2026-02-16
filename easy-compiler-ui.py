@@ -690,7 +690,7 @@ class BuilderUI(tk.Tk):
             time.sleep(0.5)
             print(f"\nCompiled JewFuss-XT as {self.bot_username or 'Unknown bot'}")
             if invite:
-                print(f"[yellow]Bot invite link: {invite}")
+                print(f"[yellow]Bot invite link: [#99C3FF]{invite}")
 
             try:
                 with open(LOG_FILE, 'a', encoding='utf-8') as log_file:
