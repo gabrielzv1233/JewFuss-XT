@@ -21,7 +21,7 @@ parser.add_argument("--debug", action="store_true")
 args, _ = parser.parse_known_args()
 
 if args.clean:
-    print('[yellow]Compiling with "--clean"')
+    print('[yellow]PyInstaller will compile with "--clean"')
 if args.debug:
     print('[yellow]Launched with Debug mode enabled')
 
