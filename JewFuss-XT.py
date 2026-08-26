@@ -2529,7 +2529,7 @@ async def ls(ctx, path: str = None):
             response += "This directory is empty.\n"
 
         buffer = io.BytesIO(response.encode('utf-8'))
-        await ctx.send(file=discord.File(fp=buffer, filename="directory_listing.txt"))
+        await ctx.fm_send(f"Contents of directory: {path}", buffer, "directory_contents.txt", "Directory Contents.txt")
     except Exception as e:
         await ctx.send(f"Error: Could not list the directory contents. {str(e)}")
 
