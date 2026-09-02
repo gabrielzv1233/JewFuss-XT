@@ -1,4 +1,12 @@
-import subprocess, PyElevate, argparse, ctypes, shutil, psutil, time, sys, os
+import subprocess
+import PyElevate
+import argparse
+import ctypes
+import psutil
+import shutil
+import time
+import sys
+import os
                                         
 parser = argparse.ArgumentParser(add_help=False)
 parser.add_argument('--file', type=str, default=None)

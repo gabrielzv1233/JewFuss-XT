@@ -1,8 +1,8 @@
-from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+from pycaw.pycaw import IAudioEndpointVolume, AudioUtilities
 from threading import Thread, Event
 from Cryptodome.Cipher import AES
 from discord.ext import commands
-from PIL import Image, ImageDraw
+from PIL import ImageDraw, Image
 from comtypes import CLSCTX_ALL
 import ctypes.wintypes
 import soundcard as sc
@@ -13,16 +13,16 @@ import numpy as np
 import subprocess
 import webbrowser
 import win32crypt
-import pyautogui
 import PyElevate
+import pyautogui
 import pyperclip
 import pythoncom
 import datetime
 import platform
 import pymsgbox
 import requests
-import win32gui
 import win32con
+import win32gui
 import asyncio
 import difflib
 import discord
