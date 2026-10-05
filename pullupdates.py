@@ -1,4 +1,10 @@
-import subprocess, argparse, sys, os, shutil, pathlib
+import subprocess
+import argparse
+import pathlib
+import shutil
+import sys
+import os
+
 cwd = pathlib.Path(__file__).resolve().parent
 os.chdir(cwd)
 

@@ -1,9 +1,9 @@
 # JewFuss-Lite, a limited version of JewFuss-XT for a more light weight experince
 from discord.ext import commands
-from PIL import Image, ImageDraw
+from PIL import ImageDraw, Image
 import subprocess
-import pyautogui
 import PyElevate
+import pyautogui
 import pyperclip
 import datetime
 import platform

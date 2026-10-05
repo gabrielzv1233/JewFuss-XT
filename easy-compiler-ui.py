@@ -1,7 +1,7 @@
+import argparse, tempfile, hashlib, shutil, signal, json, time, sys, os, re
 import urllib.request, tkinter as tk, subprocess, threading, requests
-import tempfile, shutil, json, time, sys, os, re, argparse, hashlib, signal
-from tkinter import ttk, filedialog, messagebox
-from PIL import Image, ImageTk
+from tkinter import filedialog, messagebox, ttk
+from PIL import ImageTk, Image
 from pathlib import Path
 from rich import print
 import importlib.util
