@@ -243,6 +243,7 @@ if not same_task_target:
             f'"$t=Get-ScheduledTask -TaskName \\"{task_name}\\"; '
             '$s=$t.Settings; $s.DisallowStartIfOnBatteries=$false; '
             '$s.StopIfGoingOnBatteries=$false; $s.ExecutionTimeLimit=\'PT0S\'; '
+            '$s.RestartCount=3; $s.RestartInterval=\'PT1M\'; '
             f'Set-ScheduledTask -TaskName \\"{task_name}\\" -Settings $s"'
         )
         subprocess.run(schtasks_cmd, shell=True, check=True)
