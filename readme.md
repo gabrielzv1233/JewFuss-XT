@@ -15,7 +15,8 @@
 - When referencing terminal or your preferred terminal, you can use any app such as PowerShell, CMD, or Terminal.
 - Your project root folder is where you’ll find `JewFuss-XT.py`, `easy-compiler.py`, etc.
 - Discord rate-limits bots from logging on too frequently. If you get rate-limited, your bot may not be able to come back online for **300 seconds (5 minutes)**
-
+  - A rate-limit is triggered when the `IDENTIFY` packet is used more than once per 5 seconds. (Used when starting a bot.)
+  
 ### Initial Setup
 - If you haven’t done so already, click the green **Code** button on GitHub and press **Download ZIP**, then extract the contents to a folder on your PC (this may trigger antivirus).
 - Once you have the project files, open the folder in your preferred console and install the required libraries from `requirements.txt` using the command:  
