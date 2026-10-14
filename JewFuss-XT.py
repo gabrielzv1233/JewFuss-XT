@@ -39,6 +39,7 @@ import ctypes
 import psutil
 import shutil
 import signal
+import socket
 import winreg
 import shlex
 import glob
@@ -3107,12 +3108,35 @@ async def exit(ctx):
     else:
         await ctx.send("You don't have permissions to do this.")
 
+def wait_for_connection():
+    attempts = 0
+
+    while True:
+        try:
+            with socket.create_connection(("discord.com", 443), timeout=5):
+                break
+            
+        except OSError:
+            print("Waiting for internet connection...", flush=True)
+            attempts += 1
+            
+            if attempts <= 5:
+                time.sleep(5)
+            elif attempts <= 10:
+                time.sleep(10)
+            
+            else:
+                print("Failed to connect to the internet.", flush=True)
+                raise ConnectionError(f"Failed to connect after {attempts} attempts.")
+
 if __name__ == "__main__":
+    
     try:
         if "--version" in sys.argv:
             print(version, flush=False)
             sys.exit(0)
         else:
+            wait_for_connection()
             bot.run(TOKEN, reconnect=True)
     
     except discord.errors.LoginFailure:
@@ -3121,18 +3145,21 @@ if __name__ == "__main__":
     
     except KeyboardInterrupt:
         print("\n\033[91mExiting...\033[0m", flush=False)
+        sys.exit(0)
     
     except Exception as e:
-        print(f"\n\033[91mError: {e}\033[0m", flush=False)
-    
         folder = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "inf")
         os.makedirs(folder, exist_ok=True)
-    
+
         filename = datetime.now(timezone.utc).strftime("%d-%m-%y_%H-%M-%S")
         filepath = os.path.join(folder, filename)
-    
+        errorType = str(type(e).__name__)
+        
+        print(f"\n\033[91m{errorType}: {e}\033[0m", flush=False)    
         with open(filepath, "w", encoding="utf-8") as f:
-            f.write(f"{type(e).__name__}\n{e}")
+            f.write(f"{errorType}:\t\t{e}\n")
+            
+        sys.exit(1)
             
     finally:
         if tray_icon is not None:
