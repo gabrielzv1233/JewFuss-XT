@@ -31,15 +31,32 @@
 5. Scroll down to **Privileged Gateway Intents** and enable **Presence**, **Server Members**, and **Message Content** intents.
 
 ### Compiling the RAT
-> You can also use `easy-compiler-ui.py` for ease of use, but most steps will look the same
-1. If using a terminal, navigate to the project’s root folder using `cd folderpath` and run `python easy-compiler.py`.  
-   If using an IDE like [Visual Studio Code](https://code.visualstudio.com/), open the project folder, open `easy-compiler.py`, and press the **Run** button. *(You may need to configure Python in your IDE first.)*
-2. Choose whether to use a custom icon by typing `y` or `n` (`yes` or `no` also work). If you select **yes**, a file chooser will open. If **no**, the default icon will be used.
-3. Paste the bot token you saved earlier from the [Bot Setup](#bot-setup) section into the prompt. If the token is invalid, it will ask again.
-- The executable will be saved in the `builds` folder. The compiler will automatically open the folder in an Explorer tab with the executable highlighted.
-- Old builds are saved with a timestamp of the archive time.
-- A log file called `easy-compiler-build.log` will also be created, containing the date of compilation, token used, and the name of the bot.
-4. Use the invite link provided by the compiler once it finishes to invite the bot to your Discord server.
+> You can also use `easy-compiler.py` to run without a UI
+1. **Open the project and Compiler UI**
+   > You may recieve a warning if you are not using python `3.11.9`, other python versions are not officially tested
+    * If using a Terminal
+        1. navigate to the project’s root folder using `cd "{ProjectFolder}"`
+        2. run `python easy-compiler-ui.py`.  
+    * If using an IDE such as [VSCode](https://code.visualstudio.com/)
+        1. open the project folder
+        2. select the `easy-compiler-ui.py` file
+        3. press your **Run** button (or run it using the console)
+            > <small>You may need to configure Python in your IDE first.</small>
+2. **Configure the build options** Using the compiler's UI
+    1. Enter the bot token you saved earlier into the "Bot Token" field.
+        > <small>If the token is correct, it should show the name and ID of the bot associated with the token (ex `JewFuss-XT#0000`)</small>  
+    2. Choose a name for the executable, It usually helps to keep this the same when updating JewFuss-XT  
+    3. Optionally choose enable tray icon. normally this is disabled
+    4. Optionally choose to compile the installer
+        > This will compile an EXE containing JewFuss-XT, when ran, it will request administrator rights, place JewFuss-XT somewhere, excludeself from windows defender and create an adminstrator startup task  
+        
+3. **Compile the package** using the compile button (The compile button is disabled if the configuration is invalid)  
+    > You may optionally press the save button to create or update a preset, presets are saved per token and loaded via selection in the dropbox  
+    - After the build is complete a file explorer window will open with the finnished build selected  
+    - Old builds are saved with a timestamp of the archive time.  
+    - A log file called `easy-compiler-build.log` will also be created, containing the date of compilation, token used, and the name of the bot.  
+4. **Invite the bot to a control server** using the invite link provided by the compiler after a successful build.
+    > For security purposes, **NEVER place the bot into a public server** or server with anyone aside from whom is supposed to access devices running the bot
 
 ### Post Compilation
 - To test if the bot works, run the compiled executable. It will take a few seconds to come online, create a channel, and notify you that it's online.  
@@ -47,7 +64,7 @@
 - The bot runs as an invisible process (you can see it in Task Manager).  
   To stop it, use `$estop` in Discord or run:  
   `taskkill /im "taskname.exe" /f`  
-  Replace `"taskname.exe"` with the executable name (default is `JewFuss-XT.exe`).
+  Replace `"taskname.exe"` with the executable name (`JewFuss-XT.exe` by default).
 - You can see when a user was last online by checking the channel description.
 
 ### Where to Run Commands
@@ -80,7 +97,7 @@ This is simple:
 **Important:** Use the same executable name as before. If not, it won’t overwrite the current version, and you might end up with **two instances** of JewFuss-XT running (which will execute commands twice).
 
 ### Final Notes
-- Originally created by **desu23**, see their project [here](https://github.com/DeSu23/JewFuss-X).
+- Originally created by **desu23**, see their project [here](https://github.com/DeSu23/JewFuss-XT-X).
 - You can submit a GitHub issue if you find what causes Windows Defender (or other antivirus) to flag it.
 - If you run into build problems, make sure your terminal's path matches the compiler's path.
 - JewFuss-XT is made to run on **Windows only**.
