@@ -14,7 +14,7 @@
 - The compilers and JewFuss-XT are specifically designed for Windows. Linux and macOS will most likely not work.
 - When referencing terminal or your preferred terminal, you can use any app such as PowerShell, CMD, or Terminal.
 - Your project root folder is where you’ll find `JewFuss-XT.py`, `easy-compiler.py`, etc.
-- Discord rate-limits bots from logging on too frequently. If you get rate-limited, your bot may not be able to come back online for **500 seconds (10 minutes)**.
+- Discord rate-limits bots from logging on too frequently. If you get rate-limited, your bot may not be able to come back online for **300 seconds (5 minutes)**
 
 ### Initial Setup
 - If you haven’t done so already, click the green **Code** button on GitHub and press **Download ZIP**, then extract the contents to a folder on your PC (this may trigger antivirus).
