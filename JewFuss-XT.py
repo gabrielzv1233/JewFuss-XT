@@ -1,4 +1,5 @@
 from pycaw.pycaw import IAudioEndpointVolume, AudioUtilities
+from datetime import datetime, timezone
 from threading import Thread, Event
 from Cryptodome.Cipher import AES
 from discord.ext import commands
@@ -55,7 +56,7 @@ import os
 import re
 
 TOKEN = "bot token" # Do not remove or modify this comment (easy compiler looks for this) - 23r98h
-version = "1.0.13.1" # Replace with current JewFuss version, shows in some commands. Compiler looks for this comment for updates, so DO NOT MODIFY THIS COMMENT! - 25c75g
+version = "1.0.13.2" # Replace with current JewFuss version, shows in some commands. Compiler looks for this comment for updates, so DO NOT MODIFY THIS COMMENT! - 25c75g
 USE_TRAY_ICON = False # Enables Tray icon (right click to see version and exit button). DO NOT MODIFY THIS COMMENT! (easy compiler looks for this) | Default: False - 28f93g
 
 starttime = time.perf_counter()
@@ -3121,6 +3122,18 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n\033[91mExiting...\033[0m", flush=False)
     
+    except Exception as e:
+        print(f"\n\033[91mError: {e}\033[0m", flush=False)
+    
+        folder = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "inf")
+        os.makedirs(folder, exist_ok=True)
+    
+        filename = datetime.now(timezone.utc).strftime("%d-%m-%y_%H-%M-%S")
+        filepath = os.path.join(folder, filename)
+    
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(f"{type(e).__name__}\n{e}")
+            
     finally:
         if tray_icon is not None:
             try:
