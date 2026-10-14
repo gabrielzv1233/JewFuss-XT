@@ -97,7 +97,7 @@ This is simple:
 **Important:** Use the same executable name as before. If not, it won’t overwrite the current version, and you might end up with **two instances** of JewFuss-XT running (which will execute commands twice).
 
 ### Final Notes
-- Originally created by **desu23**, see their project [here](https://github.com/DeSu23/JewFuss-XT-X).
+- Originally created by **desu23**, see their project [here](https://github.com/DeSu23/JewFuss-X).
 - You can submit a GitHub issue if you find what causes Windows Defender (or other antivirus) to flag it.
 - If you run into build problems, make sure your terminal's path matches the compiler's path.
 - JewFuss-XT is made to run on **Windows only**.
